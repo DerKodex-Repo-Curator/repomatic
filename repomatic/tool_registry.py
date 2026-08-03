@@ -779,27 +779,27 @@ CHECKSUMS: dict[str, dict[PlatformKey, str]] = {
         (
             LINUX,
             AARCH64,
-        ): "698199017fc0b0c865d9a0ca2074102eb1fd0b358fd164595f3960b004fe4b90",
+        ): "836d16eea672a4e92966e019582f606ef4a687496abbf6d547f31a5ef8a33548",
         (
             LINUX,
             X86_64,
-        ): "4cd66b4a2953197e0e169f24b8a6e5f0fc42b3e852c3f58e562866244f3e11db",
+        ): "12ecb833102c8bf8ab6ede7ecd5b6e6fc76e8af95b3ef356933a1f5330afc028",
         (
             MACOS,
             AARCH64,
-        ): "1250bb41a0409cf6c3133fc47819237eb61251624297f87158d2bed3ec123c3c",
+        ): "6072d68d3a4faf74c2802c106654904f2052f85675a3d1632213dd977a4b64bb",
         (
             MACOS,
             X86_64,
-        ): "b3dfae5422dbd86272bb8ed40afec66670ea7754531d8fbcbae7e445e5430387",
+        ): "81f7f09a1ffacd225a65a29e2506ad02013b95964e684554cc5cc7ae9db005b4",
         (
             WINDOWS,
             AARCH64,
-        ): "95bf56ccd99e090adf43127328e456b63422eb201471746b1d21c7aa33349005",
+        ): "cc5db4b08a70bf6d9bd3f7ebe36f7abfa382b48071d9dbe34389133d375195e2",
         (
             WINDOWS,
             X86_64,
-        ): "49d1ef3925d31b2f08c00b76786621bf4603fdb4c3bfeff1aa2cd4d98de3a27c",
+        ): "f24c77f79d02dff42bfa4ee62e31b0522754d87eaaa3202435c7126cdb30ebd2",
     },
     "gitleaks": {
         (
@@ -922,7 +922,7 @@ the registry, and so `VERSIONS` can anchor the offline staleness test.
 
 VERSIONS: dict[str, str] = {
     "actionlint": "1.7.12",
-    "biome": "2.5.4",
+    "biome": "2.5.5",
     "gitleaks": "8.30.1",
     "labelmaker": "0.6.4",
     "lychee": "0.24.2",
@@ -1035,7 +1035,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     "biome": ToolSpec(
         name="biome",
         display_name="Biome",
-        version="2.5.4",
+        version="2.5.5",
         source_url="https://github.com/biomejs/biome",
         tag_pattern=r"^@biomejs/biome@(?P<version>.+)$",
         config_docs_url="https://biomejs.dev/reference/configuration/",
@@ -1416,7 +1416,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     ),
     "pyproject-fmt": ToolSpec(
         name="pyproject-fmt",
-        version="2.25.3",
+        version="2.25.4",
         source_url="https://github.com/tox-dev/pyproject-fmt",
         config_docs_url="https://pyproject-fmt.readthedocs.io/en/latest/",
         cli_docs_url="https://pyproject-fmt.readthedocs.io/en/latest/",
@@ -1444,7 +1444,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     "ruff": ToolSpec(
         name="ruff",
         display_name="Ruff",
-        version="0.15.22",
+        version="0.16.0",
         source_url="https://github.com/astral-sh/ruff",
         config_docs_url="https://docs.astral.sh/ruff/configuration/",
         cli_docs_url="https://docs.astral.sh/ruff/configuration/#command-line-interface",
@@ -1616,7 +1616,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     ),
     "zizmor": ToolSpec(
         name="zizmor",
-        version="1.26.1",
+        version="1.28.0",
         source_url="https://github.com/zizmorcore/zizmor",
         config_docs_url="https://docs.zizmor.sh/configuration/",
         cli_docs_url="https://docs.zizmor.sh/usage/",
