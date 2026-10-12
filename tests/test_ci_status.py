@@ -23,7 +23,9 @@ from textwrap import dedent
 from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
+from repomatic.cli.main import repomatic
 from repomatic.github.ci_status import (
     CIStatus,
     JobStatus,
@@ -128,10 +130,72 @@ def test_a_normal_failure_is_not_read_as_workflow_level():
 
 
 def test_skipped_and_cancelled_jobs_are_not_failures():
-    """Only `failure` counts: a skipped job is a gate that did not apply."""
+    """Only `failure` blocks: a skipped job is a gate that did not apply."""
     status = run(job("✅ a", "skipped"), job("✅ b", "cancelled"))
     assert status.failed_required == ()
-    assert status.verdict == "green"
+    assert status.blocking is False
+
+
+@pytest.mark.parametrize(
+    ("jobs", "conclusion", "verdict", "inconclusive"),
+    (
+        # A skipped job beside jobs that ran is a gate that did not apply.
+        ((("✅ a", "success"), ("✅ b", "skipped")), "success", "green", False),
+        # A cancelled probe gates nothing.
+        ((("✅ a", "success"), ("⁉️ b", "cancelled")), "cancelled", "green", False),
+        # Every job skipped, as `tests.yaml` does for a version-bump commit.
+        (
+            (("🧬 Project metadata", "skipped"), ("✅ a", "skipped")),
+            "skipped",
+            "skipped (no job ran)",
+            True,
+        ),
+        # A newer push stopped the run of the commit under it.
+        (
+            (("✅ a", "cancelled"), ("✅ b", "success"), ("⁉️ c", "cancelled")),
+            "cancelled",
+            "cancelled (1 required job(s))",
+            True,
+        ),
+        # Stopped, or skipped, before GitHub created a job.
+        ((), "cancelled", "cancelled (no job ran)", True),
+        ((), "skipped", "skipped (no job ran)", True),
+    ),
+)
+def test_a_run_without_a_result_never_reads_green(
+    jobs, conclusion, verdict, inconclusive
+):
+    """A run that was cancelled, or that ran no job, says nothing about its commit.
+
+    It is not a failure, so it never blocks. It is not a pass either: a `green`
+    verdict there hides that the matrix never ran on the newest commits.
+    """
+    status = run(*(job(name, outcome) for name, outcome in jobs), conclusion=conclusion)
+    assert status.verdict == verdict
+    assert status.inconclusive is inconclusive
+    assert status.blocking is False
+
+
+def test_a_failure_outranks_a_cancellation():
+    """A cancelled run that already holds a red required job is a red run."""
+    status = run(
+        job("✅ a", "failure"), job("✅ b", "cancelled"), conclusion="cancelled"
+    )
+    assert status.verdict == "1 required job(s) failed"
+    assert status.blocking is True
+    assert status.inconclusive is False
+
+
+def test_a_run_still_going_is_not_inconclusive_yet():
+    """Cancelled jobs beside running ones belong to a run that has not settled."""
+    status = run(
+        job("✅ a", "cancelled"),
+        job("✅ b", "", "in_progress"),
+        status="in_progress",
+        conclusion="",
+    )
+    assert status.verdict == "1 job(s) still running"
+    assert status.inconclusive is False
 
 
 # -- Workflow discovery -------------------------------------------------------
@@ -194,14 +258,25 @@ RED_JOB = {
     "status": "completed",
     "conclusion": "failure",
 }
+CANCELLED_JOB = {
+    "name": "✅ ubuntu-26.04 / py3.10",
+    "status": "completed",
+    "conclusion": "cancelled",
+}
+SKIPPED_JOB = {
+    "name": "🧬 Project metadata",
+    "status": "completed",
+    "conclusion": "skipped",
+}
 
 
-def _run_entry(run_id, filename, branch="main"):
+def _run_entry(run_id, filename, branch="main", conclusion="success"):
     """One entry of a per-commit run listing."""
     return {
         "id": run_id,
         "path": f".github/workflows/{filename}",
         "head_branch": branch,
+        "conclusion": conclusion,
     }
 
 
@@ -356,6 +431,121 @@ def test_read_ci_status_walks_back_to_a_path_filtered_workflow():
     assert status.blocking == []
 
 
+def test_read_ci_status_walks_back_from_a_run_that_ran_no_job():
+    """A workflow that skipped every job on the tip is read where it last ran.
+
+    The tip is a version-bump commit: `tests.yaml` skips it, and its push
+    cancelled the run of the commit under it. The skipped run reads as a
+    finished one with no failure, which hides that the matrix never ran on the
+    change.
+    """
+    runs_by_sha = {
+        TIP_SHA: [
+            _run_entry(42, "tests.yaml", conclusion="skipped"),
+            _run_entry(40, "docs.yaml"),
+        ],
+        PARENT_SHA: [_run_entry(31, "tests.yaml", conclusion="cancelled")],
+    }
+    details = {
+        42: _detail(TIP_SHA, SKIPPED_JOB, conclusion="skipped"),
+        40: _detail(TIP_SHA, GREEN_JOB),
+        31: _detail(PARENT_SHA, CANCELLED_JOB, conclusion="cancelled"),
+    }
+    with patch(
+        "repomatic.github.gh.run_gh_command",
+        side_effect=_gh([TIP_SHA, PARENT_SHA], runs_by_sha, details=details),
+    ):
+        status = read_ci_status(["tests.yaml", "docs.yaml"], "main")
+    assert [(run.run_id, run.head_sha) for run in status.runs] == [
+        (31, PARENT_SHA),
+        (40, TIP_SHA),
+    ]
+    assert status.skipped_on_tip == ["tests.yaml"]
+    assert status.runs[0].verdict == "cancelled (1 required job(s))"
+    assert status.inconclusive == [status.runs[0]]
+    assert status.blocking == []
+
+
+def test_read_ci_status_stops_at_a_cancelled_run():
+    """A cancelled run is the newest word on its workflow, whatever ran before.
+
+    The green run of the parent is older than the commit left without a result:
+    reporting it would read as a pass on a tree it never saw.
+    """
+    runs_by_sha = {
+        TIP_SHA: [_run_entry(42, "tests.yaml", conclusion="cancelled")],
+        PARENT_SHA: [_run_entry(31, "tests.yaml")],
+    }
+    details = {
+        42: _detail(TIP_SHA, CANCELLED_JOB, conclusion="cancelled"),
+        31: _detail(PARENT_SHA, GREEN_JOB),
+    }
+    with patch(
+        "repomatic.github.gh.run_gh_command",
+        side_effect=_gh([TIP_SHA, PARENT_SHA], runs_by_sha, details=details),
+    ) as mock:
+        status = read_ci_status(["tests.yaml"], "main")
+    assert [(run.run_id, run.head_sha) for run in status.runs] == [(42, TIP_SHA)]
+    assert status.runs[0].inconclusive is True
+    assert status.skipped_on_tip == []
+    assert not _called(mock, PARENT_SHA)
+
+
+def test_read_ci_status_reports_a_workflow_that_only_skipped():
+    """With nothing but skipped runs in the window, the newest one is reported.
+
+    Its own verdict says the tip has no result, so the tip note leaves it out.
+    """
+    runs_by_sha = {
+        TIP_SHA: [_run_entry(42, "tests.yaml", conclusion="skipped")],
+        PARENT_SHA: [_run_entry(31, "tests.yaml", conclusion="skipped")],
+    }
+    details = {
+        42: _detail(TIP_SHA, SKIPPED_JOB, conclusion="skipped"),
+        31: _detail(PARENT_SHA, SKIPPED_JOB, conclusion="skipped"),
+    }
+    with patch(
+        "repomatic.github.gh.run_gh_command",
+        side_effect=_gh([TIP_SHA, PARENT_SHA], runs_by_sha, details=details),
+    ) as mock:
+        status = read_ci_status(["tests.yaml"], "main")
+    assert [(run.run_id, run.head_sha) for run in status.runs] == [(42, TIP_SHA)]
+    assert status.runs[0].verdict == "skipped (no job ran)"
+    assert status.inconclusive == status.runs
+    assert status.skipped_on_tip == []
+    assert not _called(mock, "actions/workflows/")
+
+
+@pytest.mark.parametrize(("with_result", "skipped"), ((44, 43), (43, 44)))
+def test_read_ci_status_prefers_a_run_with_a_result_on_the_same_commit(
+    with_result, skipped
+):
+    """Of two runs on one commit, the one that ran a job is read, newer or not.
+
+    The usual case is a run dispatched on a commit whose push run skipped every
+    job. The other order is a later event that no job of the workflow answers.
+    """
+    entries = {
+        with_result: _run_entry(with_result, "tests.yaml"),
+        skipped: _run_entry(skipped, "tests.yaml", conclusion="skipped"),
+    }
+    # Newest first, as the API lists them.
+    runs_by_sha = {TIP_SHA: [entries[run_id] for run_id in sorted(entries)[::-1]]}
+    details = {
+        with_result: _detail(TIP_SHA, GREEN_JOB),
+        skipped: _detail(TIP_SHA, SKIPPED_JOB, conclusion="skipped"),
+    }
+    with patch(
+        "repomatic.github.gh.run_gh_command",
+        side_effect=_gh([TIP_SHA, PARENT_SHA], runs_by_sha, details=details),
+    ) as mock:
+        status = read_ci_status(["tests.yaml"], "main")
+    assert [run.run_id for run in status.runs] == [with_result]
+    assert status.skipped_on_tip == []
+    assert status.inconclusive == []
+    assert not _called(mock, PARENT_SHA)
+
+
 def test_read_ci_status_ignores_a_stale_branch_listing():
     """A months-old snapshot from the branch listing never reaches the report.
 
@@ -418,6 +608,69 @@ def test_runs_on_tip_is_empty_before_the_tip_runs():
     status = CIStatus(branch="main", tip_sha=TIP_SHA, runs=[earlier])
     assert status.runs_on_tip == []
     assert status.settled is True
+
+
+def test_ci_status_command_reports_a_run_without_a_result():
+    """The command says which commit has no result, and still exits clean.
+
+    Nothing failed, so nothing is fatal: the report is what tells a cancelled
+    or skipped run from a green one.
+    """
+    cancelled = RunStatus(
+        workflow="🔬 Tests",
+        run_id=31,
+        head_sha=PARENT_SHA,
+        status="completed",
+        conclusion="cancelled",
+        jobs=(job("✅ ubuntu-26.04 / py3.10", "cancelled"),),
+    )
+    green = RunStatus(
+        workflow="📚 Docs",
+        run_id=40,
+        head_sha=TIP_SHA,
+        status="completed",
+        conclusion="success",
+        jobs=(job("Deploy docs"),),
+    )
+    skipped = RunStatus(
+        workflow="🧹 Lint",
+        run_id=50,
+        head_sha=TIP_SHA,
+        status="completed",
+        conclusion="skipped",
+        jobs=(job("🛡️ Lint types", "skipped"),),
+    )
+    status = CIStatus(
+        branch="main",
+        tip_sha=TIP_SHA,
+        runs=[cancelled, green, skipped],
+        skipped_on_tip=["tests.yaml"],
+    )
+    with (
+        patch(
+            "repomatic.cli.github.monitored_workflows",
+            return_value=["tests.yaml", "docs.yaml", "lint.yaml"],
+        ),
+        patch("repomatic.cli.github.read_ci_status", return_value=status),
+    ):
+        result = CliRunner().invoke(repomatic, ["ci-status"])
+
+    assert result.exit_code == 0, result.output
+    assert "cancelled (1 required job(s))" in result.output
+    assert "skipped (no job ran)" in result.output
+    assert (
+        "⚠ 🔬 Tests: run 31 was cancelled before its required jobs finished, so"
+        " bbbbbbbb has no result from it." in result.output
+    )
+    assert (
+        "⚠ 🧹 Lint: run 50 ran no job, so aaaaaaaa has no result from it."
+        in result.output
+    )
+    assert (
+        "… no job ran on the tip of 'main' (aaaaaaaa) for: tests.yaml. Each one"
+        " is read on an earlier commit." in result.output
+    )
+    assert "📚 Docs: run 40" not in result.output
 
 
 def test_workflow_files_keeps_everything_with_runs_of_its_own(tmp_path):

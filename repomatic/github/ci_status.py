@@ -19,7 +19,7 @@
 repomatic names the jobs it generates, prefixing each matrix cell with a
 glyph that records whether the cell is allowed to fail: `✅` for a required
 one, `⁉️` for a probe running under `continue-on-error`. Reading that back
-was left to whoever was watching CI, and it is easy to get wrong in three
+was left to whoever was watching CI, and it is easy to get wrong in four
 specific ways this module exists to settle:
 
 - **The glyph, not the position.** Job names differ in shape across
@@ -36,6 +36,11 @@ specific ways this module exists to settle:
   expression, malformed YAML, a missing secret. There is no job log to read,
   and treating it as benign is how a persistently red workflow gets written
   off as a known artifact.
+- **A run that settled without a result.** A newer push cancels the run of
+  the commit under it, and a job-level `if:` skips every job of a run: the
+  bundled `tests.yaml` does that for a version-bump commit. Neither run has a
+  failed job, and neither says anything about its commit. Reading one as
+  green hides that the matrix never ran on the newest commits.
 
 A job carrying no stability glyph is required. That covers every non-matrix job
 (`1️⃣ Run-once tests`, `📦 Package install`, `🛡️ Lint types`), where the absence
@@ -133,6 +138,16 @@ class JobStatus:
         """Whether this job has yet to reach a terminal state."""
         return self.status not in TERMINAL_STATUSES
 
+    @property
+    def skipped(self) -> bool:
+        """Whether this job never ran: its `if:`, or a job it needs, ruled it out."""
+        return self.conclusion == "skipped"
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether this job was stopped before it finished."""
+        return self.conclusion == "cancelled"
+
 
 @dataclass(frozen=True)
 class RunStatus:
@@ -186,6 +201,47 @@ class RunStatus:
         return bool(self.failed_required) or self.workflow_level_failure
 
     @property
+    def cancelled_required(self) -> tuple[JobStatus, ...]:
+        """Required jobs stopped before they finished."""
+        return tuple(job for job in self.jobs if job.cancelled and job.required)
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether the run was stopped before its required jobs all finished.
+
+        A newer push to the same concurrency group does that to the run of the
+        commit under it. A run stopped before GitHub created any job counts
+        too.
+        """
+        if self.jobs:
+            return bool(self.cancelled_required)
+        return self.conclusion == "cancelled"
+
+    @property
+    def skipped(self) -> bool:
+        """Whether the run ran no job at all.
+
+        A job-level `if:` ruled every one of them out, which GitHub concludes as
+        a `skipped` run.
+        """
+        if self.jobs:
+            return all(job.skipped for job in self.jobs)
+        return self.conclusion == "skipped"
+
+    @property
+    def inconclusive(self) -> bool:
+        """Whether the run settled without a result for its commit.
+
+        Neither red nor green: this workflow says nothing about the tree the run
+        was created for, so nothing here holds up a merge and nothing clears it.
+        """
+        return (
+            not self.blocking
+            and not self.running_jobs
+            and (self.cancelled or self.skipped)
+        )
+
+    @property
     def verdict(self) -> str:
         """One-phrase outcome, for the table's last column."""
         if self.workflow_level_failure:
@@ -194,6 +250,12 @@ class RunStatus:
             return f"{len(self.failed_required)} required job(s) failed"
         if self.running_jobs:
             return f"{len(self.running_jobs)} job(s) still running"
+        if self.cancelled_required:
+            return f"cancelled ({len(self.cancelled_required)} required job(s))"
+        if self.cancelled:
+            return "cancelled (no job ran)"
+        if self.skipped:
+            return "skipped (no job ran)"
         if self.failed_probes:
             return f"green ({len(self.failed_probes)} probe(s) failed)"
         return "green"
@@ -215,10 +277,23 @@ class CIStatus:
     runs: list[RunStatus] = field(default_factory=list)
     """One entry per workflow that has a run, newest first."""
 
+    skipped_on_tip: list[str] = field(default_factory=list)
+    """Workflow filenames that ran no job on the tip.
+
+    Only the ones read on an earlier commit: the row of each says nothing about
+    the tip. A workflow with no other run in the window keeps its tip run, whose
+    verdict says the same.
+    """
+
     @property
     def blocking(self) -> list[RunStatus]:
         """Runs holding up a merge."""
         return [run for run in self.runs if run.blocking]
+
+    @property
+    def inconclusive(self) -> list[RunStatus]:
+        """Runs that settled without a result: cancelled, or skipped."""
+        return [run for run in self.runs if run.inconclusive]
 
     @property
     def runs_on_tip(self) -> list[RunStatus]:
@@ -377,30 +452,37 @@ def _branch_history(branch: str) -> list[str]:
     return [commit["sha"] for commit in commits if commit.get("sha")]
 
 
-def _runs_on_commit(sha: str, branch: str) -> dict[str, int]:
+def _runs_on_commit(sha: str, branch: str) -> tuple[dict[str, int], dict[str, int]]:
     """The newest run of each workflow GitHub created for commit *sha*.
+
+    A run GitHub concluded `skipped` ran no job, so it is kept apart from the
+    runs that did: {func}`read_ci_status` looks for a run with a result on an
+    earlier commit before it settles for that one.
 
     :param sha: Full commit SHA.
     :param branch: Branch the runs must belong to. The same commit also carries
         runs for a tag pushed on it, or for a pull request branch.
-    :return: Run ID by workflow filename.
+    :return: Two maps of run ID by workflow filename: the runs that ran a job,
+        then the skipped ones.
     """
     payload = gh_api_json(
         ["api", f"repos/{{owner}}/{{repo}}/actions/runs?head_sha={sha}&per_page=100"],
         strict=True,
     )
-    runs: dict[str, int] = {}
+    ran: dict[str, int] = {}
+    skipped: dict[str, int] = {}
     if not isinstance(payload, dict):
-        return runs
+        return ran, skipped
     # Newest first, per the API's ordering: the first entry seen for a
-    # workflow is its latest run on this commit.
+    # workflow is its latest run of that kind on this commit.
     for entry in payload.get("workflow_runs") or []:
         if entry.get("head_branch") != branch:
             continue
         filename = str(entry.get("path") or "").rpartition("/")[2]
+        runs = skipped if entry.get("conclusion") == "skipped" else ran
         if filename and filename not in runs:
             runs[filename] = int(entry["id"])
-    return runs
+    return ran, skipped
 
 
 def read_ci_status(workflows: Iterable[str], branch: str) -> CIStatus:
@@ -411,6 +493,13 @@ def read_ci_status(workflows: Iterable[str], branch: str) -> CIStatus:
     `paths:` filter skipped the tip is found on the commit that last started
     it. Only a workflow with no run in the whole window falls back to
     {func}`latest_run`.
+
+    A run that ran no job counts as no run at all for that walk, so a workflow
+    that skipped every job on the tip is also read on an earlier commit. A
+    cancelled run stops the walk instead: the runs under it are older than the
+    commits it left without a result, and a green one among them would hide
+    that. A workflow with nothing but skipped runs in the window is reported on
+    the newest of them.
 
     ```{warning}
     The branch-wide run listing can answer with a stale snapshot: runs from
@@ -433,16 +522,26 @@ def read_ci_status(workflows: Iterable[str], branch: str) -> CIStatus:
         status.tip_sha = history[0]
     wanted = set(names)
     found: dict[str, int] = {}
+    skipped: dict[str, int] = {}
+    idle_on_tip: set[str] = set()
     for sha in history:
-        for filename, run_id in _runs_on_commit(sha, branch).items():
+        ran, idle = _runs_on_commit(sha, branch)
+        for filename, run_id in ran.items():
             if filename in wanted and filename not in found:
                 found[filename] = run_id
+        for filename, run_id in idle.items():
+            if filename in wanted and filename not in found:
+                skipped.setdefault(filename, run_id)
+        if sha == status.tip_sha:
+            idle_on_tip = set(skipped)
         if len(found) == len(wanted):
             break
+    status.skipped_on_tip = sorted(idle_on_tip & found.keys())
     for workflow in names:
+        chosen = found.get(workflow, skipped.get(workflow))
         run = (
-            _run_status(found[workflow], workflow)
-            if workflow in found
+            _run_status(chosen, workflow)
+            if chosen is not None
             else latest_run(workflow, branch)
         )
         if run is None:

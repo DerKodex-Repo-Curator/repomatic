@@ -393,6 +393,10 @@ def ci_status(
     A job whose name carries the unstable glyph anywhere is allowed to fail
     and never affects the exit code. Every other job is required, including
     the non-matrix ones that carry no glyph at all.
+
+    A run that was cancelled, or that ran no job, is reported as such and never
+    as green: it has no result for its commit. A workflow that ran no job on
+    the tip is read on the last commit whose run of it was not skipped.
     """
     names = list(workflows) or monitored_workflows(WORKFLOW_DIR)
     if not names:
@@ -431,8 +435,24 @@ def ci_status(
             echo(f"✗ {message}")
         for job in run.failed_probes:
             echo(f"⚠ {run.workflow}: allowed-failure probe failed: {job.name}")
+        if run.inconclusive:
+            reason = (
+                "was cancelled before its required jobs finished"
+                if run.cancelled
+                else "ran no job"
+            )
+            echo(
+                f"⚠ {run.workflow}: run {run.run_id} {reason}, so"
+                f" {run.head_sha[:8]} has no result from it."
+            )
 
-    if status.tip_sha and not status.runs_on_tip:
+    if status.skipped_on_tip:
+        echo(
+            f"… no job ran on the tip of {branch!r} ({status.tip_sha[:8]}) for:"
+            f" {', '.join(status.skipped_on_tip)}. Each one is read on an earlier"
+            " commit."
+        )
+    elif status.tip_sha and not status.runs_on_tip:
         echo(
             f"… no run on the tip of {branch!r} ({status.tip_sha[:8]}) yet: every"
             " run above belongs to an earlier commit."

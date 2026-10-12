@@ -33,12 +33,14 @@
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.
 - Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
 - Fix the two CLI self-test steps of the bundled `tests.yaml`, which every run skipped: they indexed `cli_scripts`, a space-separated string. A downstream copy of the workflow needs the same edit.
+- Fix `ci-status` reporting a cancelled run, or a run that ran no job, as `green`, and reading a workflow on a tip commit where it ran no job.
 - Every setup guide step now reads like the token step: one lead sentence, numbered actions, form fields in a table, and the long explanations left in `docs/`.
 - `job-timings`, `cancel-runs` and the `ci-status` fallback now list runs with a date filter, so a stale run listing no longer feeds them weeks-old runs.
 - `cloudflare-r2 --offload` now writes why it dropped a file as Markdown in the step summary, with code-formatted names and a docs link.
 - The workflows reference now lists every `lint-repo` check, rendered from the check roster like `lint-repo --help`.
 - The bundled `benchmark-update` skill now assesses every competitor cell of a row added since the last pass, and re-anchors pinned evidence links by content after a release.
 - The bundled `babysit-ci` and `repomatic-ship` skills now run their local tests with the `test` dependency group, which repositories without default groups need.
+- The bundled `babysit-ci` skill now says to dispatch `tests.yaml` when a version-bump commit cancels the runs of the commit under it.
 - The bundled `repomatic-audit` and `repomatic-upgrade` skills now read a `lint-repo.declined` entry as a decision, and record there a template entry left out on purpose.
 - New upstream page tracks the pull requests and issues repomatic sends to the projects it depends on.
 - Give each release of the changelog and changelog archive pages a stable anchor made from its version, like `https://repomatic.net/changelog#v7-17-1`. The numbered `#id1` anchors, which moved with each release, are removed.

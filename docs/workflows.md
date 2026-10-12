@@ -945,7 +945,7 @@ Safe to re-run: tag creation skips if already exists, version bumps have eligibi
 
 ### Graceful degradation
 
-Fallback tokens (`secrets.REPOMATIC_PAT || secrets.GITHUB_TOKEN`) and `continue-on-error` for unstable targets. Job names use emoji prefixes for at-a-glance status: **✅** for stable jobs that must pass, **⁉️** for unstable jobs (e.g., experimental Python versions, unreleased platforms) that are expected to fail and won't block the workflow. [`repomatic ci-status`](cli.md) reads the same glyphs back, reporting each workflow's latest run and which of its failing jobs actually gate a merge.
+Fallback tokens (`secrets.REPOMATIC_PAT || secrets.GITHUB_TOKEN`) and `continue-on-error` for unstable targets. Job names use emoji prefixes for at-a-glance status: **✅** for stable jobs that must pass, **⁉️** for unstable jobs (e.g., experimental Python versions, unreleased platforms) that are expected to fail and won't block the workflow. [`repomatic ci-status`](cli.md) reads the same glyphs back, reporting each workflow's latest run and which of its failing jobs actually gate a merge. It reports a run that was cancelled, or that ran no job, as such and never as green: that commit has no result from the workflow.
 
 ### Dogfooding
 
