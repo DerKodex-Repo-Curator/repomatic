@@ -36,6 +36,7 @@
 - The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
 - The bundled `repomatic-deps` skill now reads the whole `modernize` range off the lockfile when several `sync-uv-lock` pull requests merged since the last release.
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
+- The bundled `repomatic-ship` skill now says how to watch CI past the 30-minute `Monitor` deadline, and to watch a dispatched run by its ID.
 - The bundled `repomatic-test-matrix` skill now says how to run every declared dependency floor in one `lowest-direct` cell.
 - The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
