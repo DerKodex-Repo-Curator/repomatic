@@ -74,6 +74,11 @@ REPO_ROOT = Path(__file__).parent.parent
 # Path to the workflows directory.
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
+METADATA_INDEX_RE = re.compile(
+    r"fromJSON\(needs\.[\w-]+\.outputs\.metadata\)\.(?P<key>\w+)\["
+)
+"""A workflow expression that indexes into one key of the metadata output."""
+
 # Workflows that are exempt from concurrency requirements.
 WORKFLOWS_WITHOUT_CONCURRENCY = frozenset((
     "autolock.yaml",  # Scheduled only, no concurrent execution possible.
@@ -1371,6 +1376,37 @@ def test_lowest_versions_cell_runs_on_the_floor_python() -> None:
     assert cell["resolution"] == "lowest-direct"
     assert cell["python-version"] == TEST_PYTHON_FULL[0]
     assert cell["state"] == "stable"
+
+
+def test_workflows_index_structured_metadata_only() -> None:
+    """A workflow indexes a metadata key only when its value is a JSON structure.
+
+    `show-metadata --format github-json` joins a list of strings with spaces
+    (see {meth}`~repomatic.metadata.core.Metadata.format_github_value`). An
+    expression that indexes such a string gives an empty value and raises
+    nothing, so a step gated on `cli_scripts[0]` is skipped on every run
+    without a word.
+    """
+    factories = Metadata().dump_factories()
+    unreadable = []
+    for path in sorted(WORKFLOWS_DIR.glob("*.yaml")):
+        text = path.read_text(encoding="UTF-8")
+        for key in sorted(set(METADATA_INDEX_RE.findall(text))):
+            if key not in factories:
+                unreadable.append(f"{path.name}: {key} is not a metadata key")
+                continue
+            value = Metadata.format_github_value(factories[key]())
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                parsed = None
+            if not isinstance(parsed, (dict, list)):
+                unreadable.append(f"{path.name}: {key} is the string {value!r}")
+    assert not unreadable, (
+        "These workflows index a metadata key that holds no JSON structure, so "
+        f"the expression is always empty: {unreadable}. Read the key whole, and "
+        "split it in the shell."
+    )
 
 
 # --- uv provisioning tests ---
