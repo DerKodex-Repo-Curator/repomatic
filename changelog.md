@@ -43,6 +43,7 @@
 - The bundled `babysit-ci` and `repomatic-ship` skills now run their local tests with the `test` dependency group, which repositories without default groups need.
 - The bundled `babysit-ci` skill now says to dispatch `tests.yaml` when a version-bump commit cancels the runs of the commit under it.
 - The bundled `repomatic-audit` and `repomatic-upgrade` skills now read a `lint-repo.declined` entry as a decision, and record there a template entry left out on purpose.
+- The bundled `repomatic-audit` skill now runs the adopted release's `init` in a throwaway worktree first, which compares every managed file at once.
 - New upstream page tracks the pull requests and issues repomatic sends to the projects it depends on.
 - Give each release of the changelog and changelog archive pages a stable anchor made from its version, like `https://repomatic.net/changelog#v7-17-1`. The numbered `#id1` anchors, which moved with each release, are removed.
 - Document that mdformat also deletes backslash escapes and entities from a Markdown image's alt-text.

@@ -58,6 +58,21 @@ Keep the two axes apart in the report, because only one of them is actionable:
 
 ### 1. Workflow audit (`workflows`)
 
+#### Ask the generator first
+
+Before you compare a managed file by hand, run the adopted release's generator on a throwaway copy of `HEAD`:
+
+```shell-session
+$ git worktree add --detach {scratch}/audit HEAD
+$ uvx --no-progress --exclude-newer-package repomatic=P0D --directory {scratch}/audit 'repomatic==X.Y.Z' init
+$ git -C {scratch}/audit diff
+$ git worktree remove --force {scratch}/audit
+```
+
+An empty diff means every thin caller, each header-only workflow header and each ongoing-sync `[tool.X]` section equals what that release generates. Any hunk is DRIFT that the sync would rewrite. Keep `--directory`: `--output-dir` alone writes into the copy but reads `[tool.repomatic]` from the directory the command started in.
+
+The generator does not read hand-owned jobs, the comment beside a synced key, or an entry only the local file carries. Compare those yourself, in the sections below.
+
 #### Thin-caller workflows
 
 Compare each local thin-caller workflow against its reference. These should be identical (except for files listed in `exclude`). Flag:
