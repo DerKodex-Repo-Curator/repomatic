@@ -1143,6 +1143,40 @@ def test_broken_links_skips_post_release_commits() -> None:
     )
 
 
+# A MyST `{include}` or `{literalinclude}` fence, capturing the path it pulls in.
+INCLUDE_DIRECTIVE_RE = re.compile(
+    r"^[`:]{3,}\{(?:literal)?include\}\s+(\S+)", re.MULTILINE
+)
+
+
+def test_docs_trigger_covers_included_root_files() -> None:
+    """The docs `paths:` filter must fire on each file the docs pull in.
+
+    A page that includes a file from outside `docs/` publishes content the
+    `docs/**` entry does not watch. With no entry of its own, a push touching
+    just that file skips the workflow, and the page stays stale until something
+    else touches a listed path. Downstream thin callers inherit this list
+    verbatim, and their docs include the same root files.
+    """
+    paths = workflow_triggers(load_workflow("docs.yaml"))["push"]["paths"]
+    included = {
+        target.removeprefix("../")
+        for page in (REPO_ROOT / "docs").glob("*.md")
+        for target in INCLUDE_DIRECTIVE_RE.findall(page.read_text(encoding="UTF-8"))
+        if target.startswith("../")
+    }
+    assert included, "No docs page includes a file from outside `docs/`."
+    unwatched = sorted(
+        target
+        for target in included
+        if not any(fnmatch(target, pattern) for pattern in paths)
+    )
+    assert not unwatched, (
+        f"docs.yaml push paths {paths} match none of {unwatched}, which the docs "
+        "include: a push touching just one of them skips the build."
+    )
+
+
 def test_docs_trigger_covers_translated_readmes() -> None:
     """The docs `paths:` filter must fire on a translated readme.
 
