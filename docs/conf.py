@@ -220,10 +220,12 @@ nitpicky = True
 # The test suite's fixture annotations name pytest's private modules, which its
 # published inventory does not carry: it documents the same classes as
 # `pytest.MonkeyPatch` and `pytest.TempPathFactory`. There is nothing to link
-# to, so stop nitpicky mode asking for it.
+# to, so stop nitpicky mode asking for it. An annotation Sphinx cannot evaluate
+# keeps the public spelling, and no inventory is mapped for that one either.
 nitpick_ignore = [
     ("py:class", "_pytest.monkeypatch.MonkeyPatch"),
     ("py:class", "_pytest.tmpdir.TempPathFactory"),
+    ("py:class", "pytest.MonkeyPatch"),
 ]
 
 # Concatenate class and __init__ docstrings.
