@@ -170,7 +170,7 @@ Comments and changelogs can lie; the codebase is the source of truth. For each d
 1. **Grep for imports.** Search the source tree for all imports from the package. List the specific APIs used (functions, classes, constants).
 2. **Determine the oldest version providing those APIs.** Check changelogs, release notes, or `pip index versions <pkg>` to see what exists on PyPI.
 3. **Lower the floor** when it exceeds the oldest compatible version. Prefer conservative minimums (the major version that introduced the API) over aggressive ones. Update both the version specifier and the comment.
-4. **Run `uv lock`** after any floor change to verify the lock still resolves.
+4. **Run `uv lock`** after any floor change to verify the lock still resolves. Run it with the uv version the workflows pin on their `setup-uv` steps, like `uvx --exclude-newer '1 week' --from 'uv==X.Y.Z' uv lock`: a newer local uv rewrites the lockfile `revision` and adds tables that CI never writes. After a floor raised in one dependency group only, add `--upgrade-package <pkg>`: a group with its own `requires-python` resolves as a separate fork, and a plain `uv lock` keeps the old pin in the other one.
 
 ### Special cases
 
