@@ -9,6 +9,7 @@
 - The `update-dep-graph` job moves from the release workflow to Autofix: it refreshes the graph on every push, for uv virtual projects too.
 - Add `dependency-graph.update` to turn off the dependency graph updates.
 - The bundled `tests.yaml` now resolves again any matrix cell that carries a `resolution` key, so a `lowest-direct` cell runs every declared dependency floor.
+- Relax the `arrow`, `boltons` and `pyyaml` floors to `>=1`, `>=19` and `>=6.0.1`.
 - `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.
 - Fix `lint-repo` advising to drop a bare `[tool.lychee] exclude` entry that no anchored form sits beside: it now names the anchored form to write instead.
@@ -21,6 +22,7 @@
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.
+- Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
 - Every setup guide step now reads like the token step: one lead sentence, numbered actions, form fields in a table, and the long explanations left in `docs/`.
 - `job-timings`, `cancel-runs` and the `ci-status` fallback now list runs with a date filter, so a stale run listing no longer feeds them weeks-old runs.
 - `cloudflare-r2 --offload` now writes why it dropped a file as Markdown in the step summary, with code-formatted names and a docs link.
