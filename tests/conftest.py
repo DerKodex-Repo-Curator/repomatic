@@ -25,6 +25,7 @@ from io import BytesIO
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import Mock, patch
+from urllib.error import URLError
 
 import pytest
 import yaml
@@ -291,6 +292,25 @@ def _no_real_gh_subprocess():
         stderr="gh is not invoked for real in the test suite.",
     )
     with patch("repomatic.github.gh.run", return_value=refused):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _no_real_http():
+    """Refuse every unmocked fetch made through {mod}`repomatic.http`.
+
+    The suite runs offline. A fetch that no test stubbed fails here the way it
+    does on a machine with no network: at once, with a `FetchError`. Left to
+    reach a live host, it makes a result depend on that host's state and rate
+    limit. A test of the whole `lint-repo` is the usual way in: one check reads
+    the `setup-uv` checksum table of this repository's own pin from the GitHub
+    API.
+
+    A test wanting a response patches `repomatic.http.urlopen` itself, or a
+    higher layer. Either shadows this stub for its duration.
+    """
+    refused = URLError("HTTP is not reached for real in the test suite.")
+    with patch("repomatic.http.urlopen", side_effect=refused):
         yield
 
 

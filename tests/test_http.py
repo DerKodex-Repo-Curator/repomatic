@@ -155,3 +155,14 @@ def test_get_cached_json_skips_store_when_ttl_disabled():
         assert _fetch(ttl=0) == PAYLOAD
 
     mock_store.assert_not_called()
+
+
+def test_suite_refuses_an_unmocked_fetch():
+    """A fetch that no test stubbed fails at once.
+
+    The `_no_real_http` fixture of `tests/conftest.py` holds this. The
+    `.invalid` domain never resolves, so a suite that lost the fixture fails
+    here on the message instead of reaching a real host.
+    """
+    with pytest.raises(FetchError, match="not reached for real"):
+        get_text("https://repomatic.invalid/")
