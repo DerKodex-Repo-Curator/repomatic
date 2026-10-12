@@ -239,10 +239,11 @@ exclude-newer = "1 week"
 # `exclude-newer`, returning the package to the normal cooldown. repomatic is
 # pinned to git main (no PyPI release to freeze), so it keeps a permanent
 # "0 day" span.
-# nuitka is held at 4.3, which the tool registry pins before it cleared the
-# window: without the entry, `repomatic run nuitka` cannot resolve that pin and
-# every binary build fails. nuitka is not in the lock, so `sync-uv-lock` prunes
-# the entry once the window has passed its cutoff.
+# A fixed date on a package the lock does not hold covers a tool that the
+# registry pins before its release cleared the window: without the entry,
+# `repomatic run` cannot resolve that pin, and every job that needs the tool
+# fails. `sync-uv-lock` prunes such an entry once the window has passed its
+# cutoff.
 exclude-newer-package = { nuitka = "2026-10-12T00:00:00Z", repomatic = "0 day" }
 # Package is at root level, not in "./src/".
 build-backend.module-root = ""
