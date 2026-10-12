@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from unittest.mock import patch
 
@@ -33,7 +33,7 @@ from repomatic import lint_repo
 from repomatic.cli.main import repomatic
 from repomatic.cli.setup import show_metadata
 from repomatic.cloudflare_r2 import PAGES_MAX_FILE_SIZE
-from repomatic.config import Config, LabelsConfig
+from repomatic.config import Config, LabelsConfig, LintRepoConfig
 from repomatic.github.token import PAT_PERMISSION_PROBES, probe_pat_permission
 from repomatic.http import FetchError
 from repomatic.labels import (
@@ -829,6 +829,203 @@ def test_bootstrap_config_drift_reads_the_pytest_legacy_table():
     assert [result.passed for result in results] == [False]
     assert results[0].message.startswith("[tool.pytest.ini_options] does not carry")
     assert "`xfail_strict`" in results[0].message
+
+
+def _template_leaves(
+    table: Mapping, keys: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], str | None]]:
+    """Yield each key of a template, then each member of a list it holds."""
+    for key, value in table.items():
+        if isinstance(value, Mapping):
+            yield from _template_leaves(value, (*keys, key))
+            continue
+        yield (*keys, key), None
+        if isinstance(value, list):
+            for member in value:
+                yield (*keys, key), str(member)
+
+
+def _reportable_entries() -> Iterator:
+    """Every entry of a seeded template whose absence `lint-repo` reports."""
+    for comp in BOOTSTRAP_CONFIGS:
+        template = tomlrt.loads(get_data_content(comp.source_file))
+        for position, (keys, member) in enumerate(_template_leaves(template)):
+            path = ".".join(keys)
+            if (path, member) in comp.customizable_entries:
+                continue
+            kind = "key" if member is None else "member"
+            yield pytest.param(
+                comp, keys, member, id=f"{comp.name}:{path}:{kind}{position}"
+            )
+
+
+def _declining(*leaf: str) -> LintRepoConfig:
+    """Build the table that declines the one entry at `leaf`, for a fixed reason."""
+    declined: dict | str = "Orchard closed."
+    for key in reversed(leaf):
+        declined = {key: declined}
+    assert isinstance(declined, dict)
+    return LintRepoConfig(declined=declined)
+
+
+@pytest.mark.parametrize(("comp", "keys", "member"), tuple(_reportable_entries()))
+def test_bootstrap_config_drift_declines_any_reportable_entry(comp, keys, member):
+    """Every entry the check reports can be declined, at its path in the section.
+
+    A missing key and a missing list member are named the way the tool's own
+    section names them, so no entry needs a syntax of its own.
+    """
+    local = tomlrt.loads(get_data_content(comp.source_file))
+    parent = local
+    for key in keys[:-1]:
+        parent = parent[key]
+    if member is None:
+        del parent[keys[-1]]
+    else:
+        parent[keys[-1]].remove(member)
+
+    # The control: without the record, the absence is a warning.
+    results = tuple(check_bootstrap_config_drift({comp.tool_name: local}))
+    assert [result.passed for result in results] == [False]
+
+    leaf = (
+        (comp.tool_name, *keys) if member is None else (comp.tool_name, *keys, member)
+    )
+    results = tuple(
+        check_bootstrap_config_drift({comp.tool_name: local}, _declining(*leaf))
+    )
+    assert [result.passed for result in results] == [None, True]
+    assert results[0].message.startswith(f"[{comp.tool_section}] declines `")
+    assert results[0].message.endswith(": Orchard closed.")
+    assert "every other entry" in results[1].message
+
+
+def test_bootstrap_config_drift_keeps_reporting_the_siblings_of_a_declined_member():
+    """Declining one member of a list says nothing about the others."""
+    local = tomlrt.loads(get_data_content("pytest.toml"))
+    local["addopts"].remove("--numprocesses=auto")
+    local["addopts"].remove("--cov-report=term")
+    results = tuple(
+        check_bootstrap_config_drift(
+            {"pytest": local}, _declining("pytest", "addopts", "--numprocesses=auto")
+        )
+    )
+    assert [result.passed for result in results] == [None, False]
+    assert '"--cov-report=term"' in results[1].message
+    assert '"--numprocesses=auto"' not in results[1].message
+
+
+def test_bootstrap_config_drift_declines_an_entry_of_the_pytest_legacy_table():
+    """An entry is named below the tool, wherever the section keeps its keys."""
+    legacy = tomlrt.loads(get_data_content("pytest.toml"))
+    del legacy["xfail_strict"]
+    results = tuple(
+        check_bootstrap_config_drift(
+            {"pytest": {"ini_options": legacy}}, _declining("pytest", "xfail_strict")
+        )
+    )
+    assert [result.passed for result in results] == [None, True]
+    assert results[0].message.startswith(
+        "[tool.pytest.ini_options] declines `xfail_strict`"
+    )
+
+
+@pytest.mark.parametrize(
+    "reason",
+    (
+        pytest.param("", id="empty"),
+        pytest.param("  ", id="blank"),
+        pytest.param(True, id="boolean"),
+        pytest.param(["Orchard closed."], id="list"),
+        pytest.param({}, id="empty-table"),
+    ),
+)
+def test_bootstrap_config_drift_wants_a_reason(reason):
+    """An entry mapped to no reason declines nothing: the reason is the point."""
+    local = tomlrt.loads(get_data_content("pytest.toml"))
+    local["addopts"].remove("--numprocesses=auto")
+    lint_repo = LintRepoConfig(
+        declined={"pytest": {"addopts": {"--numprocesses=auto": reason}}}
+    )
+    results = tuple(check_bootstrap_config_drift({"pytest": local}, lint_repo))
+    assert [result.passed for result in results] == [False, False]
+    assert '"--numprocesses=auto"' in results[0].message
+    assert 'entry `pytest.addopts."--numprocesses=auto"` gives no reason' in (
+        results[1].message
+    )
+
+
+@pytest.mark.parametrize(
+    ("leaf", "verdict"),
+    (
+        pytest.param(
+            ("pytest", "testpaths"),
+            "`[tool.pytest]` carries what it names",
+            id="carried-key",
+        ),
+        pytest.param(
+            ("pytest", "addopts", "--durations=10"),
+            "`[tool.pytest]` carries what it names",
+            id="carried-member",
+        ),
+        pytest.param(
+            ("pytest", "orchard"),
+            "the bundled `pytest.toml` does not",
+            id="key-the-template-lacks",
+        ),
+        pytest.param(
+            ("pytest",),
+            "`[tool.pytest]` carries what it names",
+            id="whole-section",
+        ),
+        pytest.param(
+            ("mypy", "pretty"),
+            "the repository has no `[tool.mypy]` section",
+            id="section-not-adopted",
+        ),
+        pytest.param(
+            ("typos", "files"),
+            "`typos` is not a tool config `init` seeds once",
+            id="not-a-seeded-config",
+        ),
+    ),
+)
+def test_bootstrap_config_drift_reports_an_entry_that_declines_nothing(leaf, verdict):
+    """A record that outlived its subject is reported, like the gap it hid.
+
+    The section took the entry back, the template dropped it, or the path
+    never named one: in each case the record now states a decision nobody is
+    making, and the next real gap at that path would arrive already declined.
+    """
+    local = tomlrt.loads(get_data_content("pytest.toml"))
+    results = tuple(check_bootstrap_config_drift({"pytest": local}, _declining(*leaf)))
+    assert [result.passed for result in results] == [True, False]
+    assert "every entry" in results[0].message
+    assert "declines nothing" in results[1].message
+    assert verdict in results[1].message
+
+
+def test_bootstrap_config_drift_roster_entry_reads_the_declined_table():
+    """The roster hands the check the table, not only the section it measures."""
+    check = next(c for c in REPO_CHECKS if c.name == "bootstrap-config-drift")
+    local = tomlrt.loads(get_data_content("pytest.toml"))
+    local["addopts"].remove("--numprocesses=auto")
+    ctx = LintContext(
+        tool_table={"pytest": local},
+        lint_repo=_declining("pytest", "addopts", "--numprocesses=auto"),
+    )
+    assert [result.passed for result in check.results(ctx)] == [None, True]
+
+
+def test_lint_context_carries_the_lint_repo_table(tmp_path, monkeypatch):
+    """`from_project` hands over what the repository told the checks."""
+    metadata_from_pyproject(tmp_path, monkeypatch, '[project]\nname = "basket"\n')
+    lint_repo = _declining("pytest", "testpaths")
+    with patch(
+        "repomatic.lint_repo._resolve_declared_labels", return_value=frozenset()
+    ):
+        ctx = LintContext.from_project(Config(lint_repo=lint_repo))
+    assert ctx.lint_repo is lint_repo
 
 
 @pytest.mark.parametrize("comp", BOOTSTRAP_CONFIGS, ids=lambda c: c.name)

@@ -32,6 +32,7 @@ from repomatic.config import (
     AgentLayout,
     Config,
     FlavorConfig,
+    LintRepoConfig,
     config_reference,
     load_repomatic_config,
 )
@@ -326,6 +327,55 @@ def test_site_cloudflare_r2_domain_must_be_a_bare_hostname():
                 }
             }
         })
+
+
+def test_lint_repo_declined_keeps_its_keys_verbatim():
+    """A declined entry is named by a tool's own keys, so none may be rewritten.
+
+    Key normalization would turn `extend-select` into `extend_select`, which
+    names no key of `[tool.ruff]`: the entry would then decline nothing.
+    """
+    config = load_repomatic_config({
+        "tool": {
+            "repomatic": {
+                "lint-repo": {
+                    "declined": {
+                        "ruff": {"lint": {"extend-select": {"PLW1514": "Orchard."}}},
+                        "pytest": {"addopts": {"--numprocesses=auto": "Harvest."}},
+                        "mypy": {"warn_unreachable": "Season."},
+                    }
+                }
+            }
+        }
+    })
+    assert config.lint_repo.declined_entries() == {
+        ("ruff", "lint", "extend-select", "PLW1514"): "Orchard.",
+        ("pytest", "addopts", "--numprocesses=auto"): "Harvest.",
+        ("mypy", "warn_unreachable"): "Season.",
+    }
+
+
+@pytest.mark.parametrize(
+    ("declined", "expected"),
+    (
+        pytest.param({}, {}, id="nothing-declined"),
+        pytest.param({"pytest": "Orchard."}, {("pytest",): "Orchard."}, id="tool"),
+        pytest.param({"pytest": {}}, {("pytest",): {}}, id="empty-tool-table"),
+        pytest.param(
+            {"pytest": {"addopts": {}}},
+            {("pytest", "addopts"): {}},
+            id="empty-key-table",
+        ),
+        pytest.param(
+            {"pytest": {"testpaths": ["tests"]}},
+            {("pytest", "testpaths"): ["tests"]},
+            id="list",
+        ),
+    ),
+)
+def test_lint_repo_declined_entries_keep_what_is_not_a_reason(declined, expected):
+    """A leaf holding no reason stays in the answer, for `lint-repo` to report."""
+    assert LintRepoConfig(declined=declined).declined_entries() == expected
 
 
 def test_load_repomatic_config_warns_unknown_keys(tmp_path, monkeypatch, caplog):

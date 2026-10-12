@@ -9,6 +9,7 @@
 - **Breaking:** `nuitka_matrix` replaces the `module_path` and `nuitka_python_flags` keys with `main_entry_point`, the value of Nuitka's `--main-entry-point`. A workflow reading either key needs the new one.
 - The `update-dep-graph` job moves from the release workflow to Autofix: it refreshes the graph on every push, for uv virtual projects too.
 - Add `dependency-graph.update` to turn off the dependency graph updates.
+- Add `lint-repo.declined` to record why a seeded tool config leaves out a bundled template entry, which `lint-repo` then stops warning about.
 - The bundled `tests.yaml` now resolves again any matrix cell that carries a `resolution` key, so a `lowest-direct` cell runs every declared dependency floor.
 - Relax the `arrow`, `boltons` and `pyyaml` floors to `>=1`, `>=19` and `>=6.0.1`.
 - Bump Nuitka from `4.2.2` to `4.3`.

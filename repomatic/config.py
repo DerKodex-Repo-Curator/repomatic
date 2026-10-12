@@ -23,6 +23,7 @@ Defines the `Config` dataclass, its TOML serialization helpers, and the
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from textwrap import dedent
@@ -40,7 +41,7 @@ from .pyproject import read_pyproject_toml
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
     from typing import Any, Final
 
 
@@ -542,6 +543,63 @@ class LintDepsConfig:
     came looking for one fact, but a project that wants its floors terser than
     its release notes says so here alone.
     """
+
+
+def _leaf_entries(
+    node: object, path: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], object]]:
+    """Yield each leaf of a nested table, with the keys leading to it.
+
+    An empty table is a leaf too: it holds nothing to descend into, so the
+    caller sees it where a value was expected.
+    """
+    if isinstance(node, Mapping) and node:
+        for key, value in node.items():
+            yield from _leaf_entries(value, (*path, str(key)))
+    elif path:
+        yield path, node
+
+
+@dataclass
+class LintRepoConfig:
+    """Nested schema for `[tool.repomatic.lint-repo]`."""
+
+    declined: dict[str, dict[str, object]] = field(default_factory=dict)
+    """Bundled template entries a seeded tool config declines, and why.
+
+    `lint-repo` warns when a tool config that `init` seeded once (`[tool.ruff]`,
+    `[tool.pytest]`, `[tool.coverage]`, `[tool.mypy]`, `[tool.mdformat]`) lacks
+    an entry its bundled template carries. Some of those absences are
+    decisions. Name each one here, at the path it has in the tool's own
+    section, mapped to the reason it stays out:
+
+    ```toml
+    [tool.repomatic.lint-repo.declined]
+    # One member of a list: the path of the list, then the member.
+    pytest.addopts."--numprocesses=auto" = "The tests share one orchard fixture."
+    # A whole key.
+    mypy.warn_unreachable = "The harvest module branches on the season."
+    ```
+
+    A mapping rather than a list, following `lint-deps.allow`: the reason is
+    the point. A declined entry is no longer a warning, and its reason renders
+    in the `lint-repo` report, so the decision stays visible instead of
+    disappearing.
+
+    Per-entry only, with no switch for a whole section: an entry names one key
+    or one list member, and the other members of that list stay reported. An
+    entry that declines nothing is reported in its turn, since the section now
+    carries what it names or the bundled template dropped it.
+    """
+
+    def declined_entries(self) -> dict[tuple[str, ...], object]:
+        """Flatten {attr}`declined` into one entry per leaf.
+
+        :return: Each leaf value, keyed by the path to it: the tool, the keys
+            of its section, and the list member when the entry names one. The
+            value is the reason, or whatever the repository wrote in its place.
+        """
+        return dict(_leaf_entries(self.declined))
 
 
 @dataclass
@@ -1109,6 +1167,12 @@ class Config:
     )
     """Dependency shippability gate configuration."""
 
+    lint_repo: LintRepoConfig = field(
+        default_factory=LintRepoConfig,
+        metadata={CONFIG_PATH_METADATA_KEY: "lint-repo"},
+    )
+    """Repository lint configuration."""
+
     mailmap_sync: bool = field(
         default=True,
         metadata={CONFIG_PATH_METADATA_KEY: "mailmap.sync"},
@@ -1633,6 +1697,7 @@ SUBCOMMAND_CONFIG_FIELDS: Final[frozenset[str]] = frozenset((
     "include",
     "labels",
     "lint_deps",
+    "lint_repo",
     "mailmap_sync",
     "metrics",
     "minimum_release_age",

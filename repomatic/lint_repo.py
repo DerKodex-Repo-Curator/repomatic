@@ -44,7 +44,7 @@ from packaging.utils import canonicalize_name
 from packaging.version import Version
 
 from .cloudflare_r2 import OFFLOAD_DOCS_URL, PAGES_MAX_FILE_SIZE
-from .config import Config, deploys_to
+from .config import Config, LintRepoConfig, deploys_to
 from .deps.uv import LockFile
 from .file_inventory import FileInventory
 from .frontmatter import split_frontmatter
@@ -2265,8 +2265,26 @@ def missing_template_entries(
                     yield path, str(item)
 
 
+_BARE_TOML_KEY = re.compile(r"[A-Za-z0-9_-]+")
+"""A TOML key that needs no quotes."""
+
+
+def _dotted_toml_key(path: Iterable[str]) -> str:
+    """Render a key path as the dotted TOML key that names it."""
+    return ".".join(
+        part if _BARE_TOML_KEY.fullmatch(part) else json.dumps(part, ensure_ascii=False)
+        for part in path
+    )
+
+
+def _template_entry(path: str, member: str | None) -> str:
+    """Name one bundled template entry the way a `lint-repo` line reads it."""
+    return f"`{path}`" if member is None else f'`{path}` member "{member}"'
+
+
 def check_bootstrap_config_drift(
     tool_table: Mapping[str, Any],
+    lint_repo: LintRepoConfig | None = None,
 ) -> Iterator[CheckResult]:
     """Report bundled knobs a seeded tool section never received.
 
@@ -2283,14 +2301,36 @@ def check_bootstrap_config_drift(
     rule on purpose, and only its maintainer can tell that from a section left
     behind.
 
+    The maintainer records that answer in
+    {attr}`~repomatic.config.LintRepoConfig.declined`. A declined entry is
+    reported as skipped, with its reason: the decision stays in the report and
+    the warning stops. The record is checked like the section it speaks for.
+    An entry that declines nothing is reported, since the next gap at its path
+    would otherwise arrive already declined.
+
     A section keeping its keys in the component's
     {attr}`~repomatic.registry.ToolConfigComponent.legacy_table` is measured
-    there, and the finding names that sub-table.
+    there, and the finding names that sub-table. An entry is declined at its
+    path below the tool either way, without the sub-table.
 
     :param tool_table: The repository's `[tool]` table, parsed.
-    :return: One result per adopted BOOTSTRAP section.
+    :param lint_repo: The repository's `[tool.repomatic.lint-repo]` table.
+        Declines nothing when omitted.
+    :return: One result per declined entry and one per adopted BOOTSTRAP
+        section, then one per recorded entry that declines nothing.
     """
-    for comp in SyncMode.BOOTSTRAP.components():
+    declined = (lint_repo or LintRepoConfig()).declined_entries()
+    seeded = {comp.tool_name: comp for comp in SyncMode.BOOTSTRAP.components()}
+    # Tools whose section was compared with its template, and tools whose
+    # template could not be read.
+    measured: set[str] = set()
+    unreadable: set[str] = set()
+    # Entries that took a finding out of the report, and entries that only
+    # lack a reason to do so.
+    applied: set[tuple[str, ...]] = set()
+    unreasoned: set[tuple[str, ...]] = set()
+
+    for comp in seeded.values():
         local = tool_table.get(comp.tool_name)
         if not isinstance(local, Mapping):
             continue
@@ -2303,38 +2343,87 @@ def check_bootstrap_config_drift(
         try:
             template = tomlrt.loads(get_data_content(comp.source_file))
         except (OSError, ValueError, tomlrt.TOMLParseError):
+            unreadable.add(comp.tool_name)
             yield CheckResult(
                 None,
                 f"[{section}] drift: skipped (bundled"
                 f" `{comp.source_file}` could not be read).",
             )
             continue
+        measured.add(comp.tool_name)
 
-        missing = tuple(
-            entry
-            for entry in missing_template_entries(template, local)
-            if entry not in comp.customizable_entries
-        )
+        missing: list[tuple[str, str | None]] = []
+        declines = False
+        for path, member in missing_template_entries(template, local):
+            if (path, member) in comp.customizable_entries:
+                continue
+            entry: tuple[str, ...] = (comp.tool_name, *path.split("."))
+            if member is not None:
+                entry = (*entry, member)
+            reason = declined.get(entry)
+            if isinstance(reason, str) and reason.strip():
+                applied.add(entry)
+                declines = True
+                yield CheckResult(
+                    None,
+                    f"[{section}] declines {_template_entry(path, member)}:"
+                    f" {reason.strip()}",
+                )
+                continue
+            if entry in declined:
+                unreasoned.add(entry)
+            missing.append((path, member))
+
         if missing:
-            listed = ", ".join(
-                f"`{path}`" if member is None else f'`{path}` member "{member}"'
-                for path, member in missing
-            )
+            listed = ", ".join(_template_entry(*found) for found in missing)
             yield CheckResult(
                 False,
                 f"[{section}] does not carry"
                 f" {listed} from the"
                 f" bundled `{comp.source_file}`. `init` seeds this section"
                 f" once and never revisits it, so a knob the template gained"
-                f" since arrives only by hand. Copy what applies, or keep the"
-                f" difference on purpose.",
+                f" since arrives only by hand. Copy what applies, and name what"
+                f" stays out under `[tool.repomatic] lint-repo.declined` with"
+                f" its reason.",
             )
             continue
 
+        scope = "every other entry" if declines else "every entry"
         yield CheckResult(
             True,
-            f"[{section}] carries every entry of the bundled `{comp.source_file}`.",
+            f"[{section}] carries {scope} of the bundled `{comp.source_file}`.",
         )
+
+    for entry in declined:
+        tool = entry[0]
+        if entry in applied or tool in unreadable:
+            continue
+        named = (
+            f"`[tool.repomatic] lint-repo.declined` entry `{_dotted_toml_key(entry)}`"
+        )
+        owner = seeded.get(tool)
+        if entry in unreasoned:
+            verdict = (
+                "gives no reason, so the entry it names stays reported. Map it"
+                " to the reason that entry stays out."
+            )
+        elif owner is None:
+            verdict = (
+                f"declines nothing: `{tool}` is not a tool config `init` seeds"
+                f" once. Remove the entry."
+            )
+        elif tool not in measured:
+            verdict = (
+                f"declines nothing: the repository has no"
+                f" `[{owner.tool_section}]` section. Remove the entry."
+            )
+        else:
+            verdict = (
+                f"declines nothing: `[{owner.tool_section}]` carries what it"
+                f" names, or the bundled `{owner.source_file}` does not. Remove"
+                f" the entry."
+            )
+        yield CheckResult(False, f"{named} {verdict}")
 
 
 _ANCHORED_EXCLUDE_HEAD = re.compile(r"^\^https://\(www\\\.\)\?")
@@ -3176,6 +3265,9 @@ class LintContext:
     tool_table: Mapping[str, Any] = field(default_factory=dict)
     """The `[tool]` table of `pyproject.toml`, parsed."""
 
+    lint_repo: LintRepoConfig = field(default_factory=LintRepoConfig)
+    """What the repository told the checks, per `[tool.repomatic.lint-repo]`."""
+
     repo: str | None = None
     """Repository in `owner/repo` format."""
 
@@ -3339,6 +3431,7 @@ class LintContext:
             docs_url=documentation_url(project_table.get("urls")),
             keywords=project_table.get("keywords"),
             tool_table=metadata.pyproject_toml.get("tool", {}),
+            lint_repo=config.lint_repo,
             repo=repo or None,
             has_pat=has_pat,
             has_virustotal_key=has_virustotal_key,
@@ -4150,9 +4243,10 @@ REPO_CHECKS: tuple[RepoCheck, ...] = (
     ),
     RepoCheck(
         "bootstrap-config-drift",
-        lambda ctx: check_bootstrap_config_drift(ctx.tool_table),
+        lambda ctx: check_bootstrap_config_drift(ctx.tool_table, ctx.lint_repo),
         summary=(
-            "Seeded tool configs carry every entry their bundled template gained since"
+            "Seeded tool configs carry every bundled template entry, or decline it"
+            " with a reason"
         ),
         description=(
             "Warns when a tool config seeded once (`[tool.ruff]`, `[tool.pytest]`,"
@@ -4165,7 +4259,10 @@ REPO_CHECKS: tuple[RepoCheck, ...] = (
             " under `[tool.pytest.ini_options]` is measured there, since pytest"
             " refuses a file holding both that table and the native keys. Advisory,"
             " since a template rule dropped on purpose looks identical to one never"
-            " received, and only the maintainer can tell them apart"
+            " received, and only the maintainer can tell them apart. An entry named"
+            " under `[tool.repomatic] lint-repo.declined` is reported with its reason"
+            " in place of the warning, and an entry there that declines nothing is"
+            " warned about in its turn"
         ),
         applies=lambda ctx: bool(ctx.tool_table),
     ),

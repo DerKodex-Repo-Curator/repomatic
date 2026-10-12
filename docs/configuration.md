@@ -271,6 +271,18 @@ Adoption is one-way. Once the section exists, a bare `init` picks it back up on 
 
 Only the configs repomatic keeps syncing behave this way: `typos`, `uv` and `bumpversion` through this adoption path, plus `lychee` on awesome-list repos, where it lands by default rather than through explicit naming. The rest (`ruff`, `pytest`, `coverage`, `mypy`, `mdformat`) are starting points the repository owns outright after the first write, and `init` never revisits them. That leaves one thing the ownership cannot cover: a knob the bundled template gains *afterwards* has no route in, and the section quietly stops being the configuration repomatic ships. `lint-repo` reports the difference so the repository can take it or decline it, and reports nothing about a value it tuned, a key it added or a comment it rewrote. A template entry every project is meant to replace, like pytest's `--cov=.`, is declared on the component and never reported.
 
+To decline an entry, name it under `lint-repo.declined` with the reason it stays out. Write it at the path it has in the tool's own section:
+
+```toml
+[tool.repomatic.lint-repo.declined]
+# One member of a list: the path of the list, then the member.
+pytest.addopts."--numprocesses=auto" = "The tests share one orchard fixture."
+# A whole key.
+mypy.warn_unreachable = "The harvest module branches on the season."
+```
+
+`lint-repo` then reports the entry with its reason in place of the warning, so the decision stays visible. An entry names one key or one list member, never a whole section. An entry that declines nothing gets a warning of its own: the section took back what it names, or the template dropped it.
+
 An ongoing sync has the mirror-image gap on the arrays it grafts. The graft appends every item the template does not carry and retires nothing, so an entry the template *replaced* rather than added comes back beside its own replacement on the next sync. `lint-repo` reports the pair it can recognise: a bare `[tool.lychee] exclude` pattern the bundle has since anchored. lychee matches those entries as substrings, so the stale bare form goes on excluding every domain ending in the same suffix, which is what the anchoring was written to stop.
 
 ## `[tool.X]` bridge and tool runner
