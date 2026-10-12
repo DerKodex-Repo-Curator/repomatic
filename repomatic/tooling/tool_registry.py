@@ -1735,7 +1735,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     "nuitka": ToolSpec(
         name="nuitka",
         display_name="Nuitka",
-        version="4.2.2",
+        version="4.3",
         package="nuitka[onefile]",
         source_url="https://github.com/Nuitka/Nuitka",
         config_docs_url="https://nuitka.net/doc/user-manual.html",
@@ -1743,7 +1743,14 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         needs_venv=True,
         module="nuitka",
         native_format=NativeFormat.FLAGS,
-        default_flags=("--mode=onefile", "--assume-yes-for-downloads"),
+        # Nuitka looks up its newest release on PyPI and warns when the running
+        # one is older. The pin above trails that release by the cooldown
+        # window on purpose, so the check is turned off.
+        default_flags=(
+            "--mode=onefile",
+            "--assume-yes-for-downloads",
+            "--update-check=never",
+        ),
         # Modules listed in [tool.repomatic] nuitka.nofollow-imports are kept
         # out of the binary ("tkinter" by default, else boltons.ecoutils'
         # guarded probe drags the whole Tcl/Tk stack into every CLI).
@@ -1755,8 +1762,10 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
             **Try it:**
 
             ```shell-session
-            $ repomatic run nuitka -- my_app/__main__.py
+            $ repomatic run nuitka -- --project-name=papaya --main-entry-point=papaya=papaya.__main__:main
             ```
+
+            `--main-entry-point` takes a `[project.scripts]` entry, written `name=module:function`, and compiles the binary that console script would start. It needs `--project-name`, which names the build folders.
 
             **Minimal `[tool.nuitka]`:**
 

@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import logging
 from functools import cached_property
-from pathlib import Path
 
 from ..github.actions import (
     WorkflowEvent,
@@ -134,14 +133,13 @@ class MatrixMetadata:
         matrix it computes, or `repomatic show-test-matrix` for the test one.
         ```
 
-        ```{todo}
-        Drop the per-entry-point `--python-flag=-m` workaround computed below,
-        and compile a `__main__.py` entry point through Nuitka's own
-        `--main-entry-point`, once
-        [Nuitka#3879](https://github.com/Nuitka/Nuitka/issues/3879) ships.
-        [Nuitka#4024](https://github.com/Nuitka/Nuitka/issues/4024) gates this too: the entry point derived from
-        `[project.scripts]` usually carries its package's name, and Nuitka's
-        generated launcher then shadows that package.
+        ```{note}
+        Each entry point compiles through Nuitka's `--main-entry-point`, which
+        needs Nuitka `4.3`. Earlier releases crashed on the option
+        ([Nuitka#3879](https://github.com/Nuitka/Nuitka/issues/3879)), or built
+        a binary that failed at startup when the entry point carried the name
+        of its package
+        ([Nuitka#4024](https://github.com/Nuitka/Nuitka/issues/4024)).
         ```
         """
         # Only produce a matrix if the project is providing CLI entry points.
@@ -187,64 +185,25 @@ class MatrixMetadata:
 
         # `[tool.nuitka]` is not assembled here: `repomatic run nuitka` resolves
         # it at build time (the tool runner translates the section to CLI flags).
-        # Only the per-entry-point --python-flag=-m workaround is computed below.
 
         # Filter entry points to those selected for Nuitka compilation.
         selected = set(self.nuitka_entry_points)
         for cli_id, module_id, callable_id in self.script_entries:
             if cli_id not in selected:
                 continue
-            # Derive CLI module path from its ID. `--main-entry-point` is
-            # unusable on its own: 4.1 crashed with `NuitkaCodeDeficit: Error,
-            # cannot locate modules before import mechanism is setup` inside
-            # `setStandardLibraryModules`, and 4.2 exits asking for a project
-            # name. Falling back to a positional module path keeps
-            # `_main_paths` initialized via `addMainScriptDirectory`.
-            module_path = Path(f"{module_id.replace('.', '/')}.py")
-            # That positional path is resolved from the repository root, which
-            # a src-layout project does not expose: `mypkg.__main__` lives at
-            # `src/mypkg/__main__.py`, not `mypkg/__main__.py`. Skip the entry
-            # point instead of failing, so a project laid out that way still
-            # gets its metadata (only its binaries are unavailable).
-            if not module_path.exists():
-                logging.warning(
-                    f"Skipping Nuitka entry point {cli_id!r}: no module file "
-                    f"at {module_path}."
-                )
-                continue
             # CLI ID is supposed to be unique, we'll use that as a key.
             matrix.add_variation("entry_point", [cli_id])
-
-            # When the entry point is a `__main__.py` inside a package,
-            # Nuitka expects the package directory (not the file) along
-            # with `--python-flag=-m`.  Passing the file directly
-            # produces a binary that silently exits without output.
-            python_flags = ""
-            if module_path.name == "__main__.py":
-                package_dir = module_path.parent
-                init_file = package_dir / "__init__.py"
-                if init_file.exists():
-                    module_path = package_dir
-                    python_flags = "--python-flag=-m"
-
             matrix.add_includes({
                 "entry_point": cli_id,
                 "cli_id": cli_id,
                 "module_id": module_id,
                 "callable_id": callable_id,
-                "module_path": str(module_path),
-                "nuitka_python_flags": python_flags,
+                # The value of Nuitka's `--main-entry-point`: Nuitka imports
+                # the module by name and calls the function, like the console
+                # script does, so the entry point needs no file path and
+                # builds from any project layout.
+                "main_entry_point": f"{cli_id}={module_id}:{callable_id}",
             })
-
-        # Every selected entry point was skipped above. The `bin_name` template
-        # below interpolates `cli_id`, so carrying on would raise instead of
-        # reporting "nothing to compile".
-        if "entry_point" not in matrix.variations:
-            logging.warning(
-                "No Nuitka entry point resolves to a module file."
-                " Skipping binary compilation."
-            )
-            return None
 
         # For releases, only build binaries for the release (freeze) commits. The
         # post-release bump commit doesn't need binaries — only the freeze commit

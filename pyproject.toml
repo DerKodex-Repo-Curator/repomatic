@@ -239,7 +239,11 @@ exclude-newer = "1 week"
 # `exclude-newer`, returning the package to the normal cooldown. repomatic is
 # pinned to git main (no PyPI release to freeze), so it keeps a permanent
 # "0 day" span.
-exclude-newer-package = { repomatic = "0 day" }
+# nuitka is held at 4.3, which the tool registry pins before it cleared the
+# window: without the entry, `repomatic run nuitka` cannot resolve that pin and
+# every binary build fails.
+# XXX Remove the nuitka entry: https://repomatic.net/nuitka#supply-chain-posture
+exclude-newer-package = { nuitka = "2026-10-12T00:00:00Z", repomatic = "0 day" }
 # Package is at root level, not in "./src/".
 build-backend.module-root = ""
 build-backend.source-exclude = [
@@ -266,8 +270,8 @@ build-backend.source-include = [
 ]
 
 # Nuitka binary build options. repomatic translates this section to CLI flags
-# at build time via `repomatic run nuitka` (Nuitka itself only reads it when
-# acting as the wheel build backend: https://github.com/Nuitka/Nuitka/issues/2136).
+# at build time via `repomatic run nuitka` (Nuitka itself reads it only under
+# `--project`, a mode repomatic cannot use: https://repomatic.net/nuitka#upstream-workarounds).
 # Values with spaces are fine: the tool runner passes them as a proper argv.
 [tool.nuitka]
 copyright = "Kevin Deldycke <kevin@deldycke.com> and contributors. Distributed under GPL-2.0-or-later license."

@@ -49,9 +49,9 @@ def main():
 
     - the plain module call: `python -m repomatic`,
     - the `[project.scripts]` console script: `repomatic = "repomatic.__main__:main"`,
-    - Nuitka's main-module compilation requirement, which takes the
-      package directory rather than this file:
-      `python -m nuitka (...) --python-flag=-m repomatic`.
+    - the launcher Nuitka generates for the compiled binary, which imports this
+      module and calls the function:
+      `python -m nuitka (...) --main-entry-point=repomatic=repomatic.__main__:main`.
     """
     repomatic(prog_name=repomatic.name)
 

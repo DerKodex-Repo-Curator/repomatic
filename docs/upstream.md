@@ -98,6 +98,10 @@ Issues found while building repomatic and resolved upstream. Where repomatic car
 - [`mdformat-myst#45`](https://github.com/executablebooks/mdformat-myst/issues/45) / [`mdformat-myst#46`](https://github.com/executablebooks/mdformat-myst/pull/46) - `mdformat-myst` depended on `mdformat-frontmatter`, which made it incompatible with `mdformat` `1.0.0`. `#46` replaced that dependency with `mdformat-front-matters`. repomatic ran `mdformat-myst` from its `master` branch, then from a fork, until a release carried the change.
 - [`mdformat-pelican#3`](https://github.com/gaige/mdformat-pelican/issues/3) / [`mdformat-pelican#4`](https://github.com/gaige/mdformat-pelican/pull/4) - `mdformat-pelican` and `mdformat-gfm` could not run together, also reported as [`mdformat-gfm#38`](https://github.com/hukkin/mdformat-gfm/issues/38). repomatic depended on a personal fork that carried the fix, then on unreleased upstream, then on the release that shipped it.
 - [`mdformat-web#5`](https://github.com/hukkin/mdformat-web/pull/5) - The HTML formatter added an extra doctype to `html` code blocks. repomatic ran a patched `mdformat-web` from June 2023 until `0.2.0` shipped the fix.
+- [`Nuitka#3879`](https://github.com/Nuitka/Nuitka/issues/3879) / [`Nuitka#4024`](https://github.com/Nuitka/Nuitka/issues/4024) - `--main-entry-point` crashed without a positional main program, then built a binary that failed at startup when the entry point carried the name of its package. repomatic compiled each entry point from its file path, with `--python-flag=-m` for a `__main__.py`, and skipped every src-layout project, until `4.3` fixed both.
+- [`Nuitka#3994`](https://github.com/Nuitka/Nuitka/issues/3994) - A symlink inside an `--include-data-dir` tree shipped dangling, and crashed the macOS code signing. The tool runner staged a copy of the directory with no symlinks until `4.3`, which ships the content of such a link.
+- [`Nuitka#3998`](https://github.com/Nuitka/Nuitka/issues/3998) - `enableCcache` replaced a user-set `CCACHE_SLOPPINESS` with its own value. Since `4.3` Nuitka adds its value to the user's.
+- [`Nuitka#4025`](https://github.com/Nuitka/Nuitka/issues/4025) - `--project` refused to build over a `py.typed` and over a dependency's package data, until `4.3`.
 - [`tomlrt#171`](https://github.com/dimbleby/tomlrt/issues/171) - `Table.section()` dropped standalone comments and inline-array padding from the source document. repomatic rebuilt each section with a helper to keep them, and removed the helper once `tomlrt` `2.2.4` fixed the clone path.
 - [`zizmor#1664`](https://github.com/zizmorcore/zizmor/issues/1664) - The `template-injection` audit failed on a multiline YAML block. repomatic turned the audit off until `zizmor` `1.23.0` fixed it, then turned it back on.
 
@@ -191,9 +195,7 @@ repomatic post-processes the output of `mdformat` to undo two `mdformat-myst` re
 
 [Nuitka integration](nuitka.md) details the workaround for each of these:
 
-- [`Nuitka#3879` - `--main-entry-point` doesn't populate the `_main_module` and `_main_paths` internal state](https://github.com/Nuitka/Nuitka/issues/3879) and [`Nuitka#4024` - `--main-entry-point` whose CLI name matches its package builds a binary that fails at startup](https://github.com/Nuitka/Nuitka/issues/4024): repomatic compiles a `__main__.py` entry point as its package directory, with `--python-flag=-m`.
-- [`Nuitka#3909` - With `--project` the `[tool.nuitka]` section of `pyproject.toml` is ignored](https://github.com/Nuitka/Nuitka/issues/3909) and [`Nuitka#4025` - `--project` refuses to build over a `py.typed` and over a dependency's package data](https://github.com/Nuitka/Nuitka/issues/4025): Nuitka `4.2` reads `[tool.nuitka]` only under `--project`, a mode repomatic cannot use, so the tool runner turns the section into command-line flags. [`Nuitka#2136`](https://github.com/Nuitka/Nuitka/issues/2136) asked for the same support earlier.
-- [`Nuitka#3994` - `--include-data-dir` package dangling symlinks: silent on Linux, `FileNotFoundError` in macOS signing](https://github.com/Nuitka/Nuitka/issues/3994): the tool runner stages a copy of the data directory with no symlinks before it calls Nuitka.
+- [`Nuitka#3909` - With `--project` the `[tool.nuitka]` section of `pyproject.toml` is ignored](https://github.com/Nuitka/Nuitka/issues/3909): since `4.2` Nuitka reads `[tool.nuitka]`, but only under `--project`, a mode repomatic cannot use, so the tool runner turns the section into command-line flags. [`Nuitka#2136`](https://github.com/Nuitka/Nuitka/issues/2136) asked for the same support earlier.
 - [`Nuitka#3996` - `ccache` never hits across CI machines](https://github.com/Nuitka/Nuitka/issues/3996): the release workflow writes `base_dir` into `ccache.conf`.
 - [`Nuitka#3997` - Tool downloads are fetched and executed without integrity verification](https://github.com/Nuitka/Nuitka/issues/3997): the macOS builds turn ccache off, which keeps its unverified download out of the build.
 
@@ -256,8 +258,6 @@ Pull requests and issues still pending upstream.
   ```{todo}
   When `sync-tool-versions` moves the `mdformat-web` pin past `0.2.0`, run the reproducer from [hukkin/mdformat-web#8](https://github.com/hukkin/mdformat-web/issues/8) through `repomatic run mdformat`. Then update this entry to match the result.
   ```
-
-- [`Nuitka#3998` - `enableCcache` overwrites a user-set `CCACHE_SLOPPINESS`, unlike `CCACHE_DIR` which is honored](https://github.com/Nuitka/Nuitka/issues/3998)
 
 - [`MyST-Parser#1210` - Image `alt` text loses backslash escapes](https://github.com/executablebooks/MyST-Parser/issues/1210): the same loss in the `alt` attribute of a page that Sphinx builds.
 

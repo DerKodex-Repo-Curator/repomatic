@@ -785,16 +785,15 @@ expected: dict[str, Any] = {
                 "extension": "exe",
                 "floor": "10",
             },
-            # Entry point info (fixed, one per entry point). The --python-flag=-m
-            # workaround for __main__.py packages rides here, per entry point;
+            # Entry point info (fixed, one per entry point). The value of
+            # Nuitka's --main-entry-point rides here, per entry point;
             # [tool.nuitka] is resolved at build time by `repomatic run nuitka`.
             {
                 "entry_point": "repomatic",
                 "cli_id": "repomatic",
                 "module_id": "repomatic.__main__",
                 "callable_id": "main",
-                "module_path": regex(r"repomatic(/|\\)?"),
-                "nuitka_python_flags": "--python-flag=-m",
+                "main_entry_point": "repomatic=repomatic.__main__:main",
             },
             # State (fixed).
             {"state": "stable"},
@@ -1514,6 +1513,37 @@ def test_nuitka_matrix_full_fleet_locally():
     assert set(matrix["os"]) == {
         target.runner for target in NUITKA_BUILD_TARGETS.values()
     }
+
+
+@pytest.mark.repo_maintenance
+def test_nuitka_matrix_needs_no_module_file(tmp_path, monkeypatch):
+    """An entry point reaches the matrix whatever the layout of its project.
+
+    Nuitka imports the module by name, so the matrix never looks for a file. No
+    `papaya/__main__.py` exists below the working directory, which is what a
+    src-layout project leaves at the path its module name spells.
+    """
+    pyproject_content = """\
+[project]
+name = "papaya"
+version = "1.0.0"
+
+[project.scripts]
+papaya = "papaya.__main__:main"
+"""
+    metadata = metadata_from_pyproject(tmp_path, monkeypatch, pyproject_content)
+    matrix = metadata.nuitka_matrix
+    assert matrix is not None
+    entry_points = [entry for entry in matrix.include if "main_entry_point" in entry]
+    assert entry_points == [
+        {
+            "entry_point": "papaya",
+            "cli_id": "papaya",
+            "module_id": "papaya.__main__",
+            "callable_id": "main",
+            "main_entry_point": "papaya=papaya.__main__:main",
+        }
+    ]
 
 
 def test_nuitka_matrix_skips_push_without_dev_targets(monkeypatch):

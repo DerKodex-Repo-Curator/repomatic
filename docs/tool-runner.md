@@ -17,7 +17,7 @@ Drop the `[tool.X]` translation layer for each tool that grows native `pyproject
 [gitleaks#2066](https://github.com/gitleaks/gitleaks/issues/2066),
 [zizmor#322](https://github.com/orgs/zizmorcore/discussions/322#discussioncomment-15919620).
 The same request for shfmt ([sh#1268](https://github.com/mvdan/sh/issues/1268)) was declined.
-[Nuitka#3909](https://github.com/Nuitka/Nuitka/issues/3909) shipped in `4.2`, but only for `--project` builds, which take their entry points from the project configuration. repomatic names a main module on the command line, so the nuitka bridge stays.
+[Nuitka#3909](https://github.com/Nuitka/Nuitka/issues/3909) shipped in `4.2`, but only for `--project` builds, which take their entry points from the project configuration. repomatic names one entry point per build on the command line, so the nuitka bridge stays.
 ```
 
 ## Quick start
