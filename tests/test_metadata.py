@@ -854,31 +854,65 @@ expected: dict[str, Any] = {
         "windows-11-arm": "aarch64",
         "windows-2025": "x86_64",
     },
+    # A flat job list instead of axes: the `full-include` row of this
+    # repository's `[tool.repomatic] test-matrix` makes the full matrix name
+    # every job. That row comes last: it is the lowest-versions cell.
     "test_matrix": {
-        "os": [
-            "ubuntu-26.04-arm",
-            "ubuntu-26.04",
-            "macos-26",
-            "macos-26-intel",
-            "windows-11-arm",
-            "windows-2025",
-        ],
-        "python-version": [
-            "3.10",
-            "3.14",
-            "3.15",
-        ],
         "include": [
-            {"state": "stable"},
+            {"state": "stable", "os": "ubuntu-26.04-arm", "python-version": "3.10"},
+            {"state": "stable", "os": "ubuntu-26.04-arm", "python-version": "3.14"},
             {
                 "state": "unstable",
+                "os": "ubuntu-26.04-arm",
                 "python-version": "3.15",
                 "python-label": "3.15-dev",
             },
-            {"os": "ubuntu-26.04-arm", "python-version": "3.14t", "state": "stable"},
-        ],
-        "exclude": [
-            {"os": "windows-11-arm", "python-version": "3.10"},
+            {"state": "stable", "os": "ubuntu-26.04", "python-version": "3.10"},
+            {"state": "stable", "os": "ubuntu-26.04", "python-version": "3.14"},
+            {
+                "state": "unstable",
+                "os": "ubuntu-26.04",
+                "python-version": "3.15",
+                "python-label": "3.15-dev",
+            },
+            {"state": "stable", "os": "macos-26", "python-version": "3.10"},
+            {"state": "stable", "os": "macos-26", "python-version": "3.14"},
+            {
+                "state": "unstable",
+                "os": "macos-26",
+                "python-version": "3.15",
+                "python-label": "3.15-dev",
+            },
+            {"state": "stable", "os": "macos-26-intel", "python-version": "3.10"},
+            {"state": "stable", "os": "macos-26-intel", "python-version": "3.14"},
+            {
+                "state": "unstable",
+                "os": "macos-26-intel",
+                "python-version": "3.15",
+                "python-label": "3.15-dev",
+            },
+            {"state": "stable", "os": "windows-11-arm", "python-version": "3.14"},
+            {
+                "state": "unstable",
+                "os": "windows-11-arm",
+                "python-version": "3.15",
+                "python-label": "3.15-dev",
+            },
+            {"state": "stable", "os": "windows-2025", "python-version": "3.10"},
+            {"state": "stable", "os": "windows-2025", "python-version": "3.14"},
+            {
+                "state": "unstable",
+                "os": "windows-2025",
+                "python-version": "3.15",
+                "python-label": "3.15-dev",
+            },
+            {"state": "stable", "os": "ubuntu-26.04-arm", "python-version": "3.14t"},
+            {
+                "state": "stable",
+                "os": "ubuntu-26.04-arm",
+                "python-version": "3.10",
+                "resolution": "lowest-direct",
+            },
         ],
     },
     "test_matrix_pr": {

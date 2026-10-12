@@ -44,6 +44,8 @@ from repomatic.github.workflow_sync import (
     workflow_triggers,
 )
 from repomatic.lint_repo import KNOWN_RUNNERS
+from repomatic.matrix_axes import TEST_PYTHON_FULL
+from repomatic.metadata.core import Metadata
 from repomatic.registry import (
     ALL_WORKFLOW_FILES,
     COMPONENTS,
@@ -1321,6 +1323,54 @@ def test_prerelease_python_label_reaches_the_job_name() -> None:
         "The test job name no longer reads the prerelease label, or dropped the "
         f"fallback every released cell needs. Got: {name!r}"
     )
+
+
+def test_resolution_cell_is_read_by_the_test_job() -> None:
+    """A matrix cell carrying a `resolution` key resolves the project with it.
+
+    `[tool.repomatic] test-matrix.full-include` adds such a cell to run every
+    declared dependency floor. With no step reading the key, the cell installs
+    the lockfile like its twin and verifies nothing. With no trace of the key
+    in the job name, the two cells cannot be told apart.
+    """
+    job = load_workflow("tests.yaml")["jobs"]["tests"]
+    assert "format(' / {0}', matrix.resolution)" in job["name"], (
+        f"The test job name no longer shows the resolution. Got: {job['name']!r}"
+    )
+
+    steps = job["steps"]
+    readers = [step for step in steps if step.get("if") == "matrix.resolution"]
+    assert len(readers) == 1, (
+        "Expected one step of the test job to run on a `resolution` cell only, "
+        f"got {len(readers)}."
+    )
+    (reader,) = readers
+    assert reader["env"] == {"RESOLUTION": "${{ matrix.resolution }}"}
+    assert '--resolution "${RESOLUTION}"' in reader["run"]
+    assert "--frozen" not in reader["run"], (
+        "A frozen sync installs the lockfile, which holds no declared floor."
+    )
+
+    # The step replaces what `Install project` put in place, and the tests then
+    # run on the result.
+    names = [step.get("name") for step in steps]
+    assert names.index("Install project") < steps.index(reader), names
+    assert steps.index(reader) < names.index("Unittests"), names
+
+
+def test_lowest_versions_cell_runs_on_the_floor_python() -> None:
+    """This repository runs one stable `lowest-direct` cell, on its lowest Python.
+
+    The oldest dependencies meet the oldest interpreter there, which is the
+    environment a declared floor promises to support. When the Python floor
+    moves, this cell has to move with it.
+    """
+    cells = [job for job in Metadata().test_matrix.solve() if job.get("resolution")]
+    assert len(cells) == 1, f"Expected one cell with a resolution, got {cells!r}."
+    (cell,) = cells
+    assert cell["resolution"] == "lowest-direct"
+    assert cell["python-version"] == TEST_PYTHON_FULL[0]
+    assert cell["state"] == "stable"
 
 
 # --- uv provisioning tests ---

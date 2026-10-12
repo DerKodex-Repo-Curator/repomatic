@@ -29,7 +29,7 @@ from repomatic.cli.main import repomatic
 invoke(repomatic, args=['show-test-matrix', 'full'])
 ```
 
-With no `[tool.repomatic.test-matrix.*]` overrides, this is the built-in default: the six runners from the inventory below, the default Python versions, and the rows the transform chain contributes: the `3.15` prerelease flagged `unstable`, the free-threaded `3.14t` build pinned to a single runner as a stable smoke test, and `windows-11-arm` dropped on `3.10`.
+This is the built-in default plus one row. The default holds the six runners from the inventory below, the default Python versions, and the rows the transform chain contributes: the `3.15` prerelease flagged `unstable`, the free-threaded `3.14t` build pinned to a single runner as a stable smoke test, and `windows-11-arm` dropped on `3.10`. The row with a `resolution` value is this repository's own: see [§ Run every declared floor in one cell](#run-every-declared-floor-in-one-cell).
 
 The reduced pull-request matrix keeps one runner per OS and two Python versions, for faster feedback:
 
@@ -49,7 +49,7 @@ Rows sort on `--row-axis` first and `--col-axis` next, and those two axes lead t
 invoke(repomatic, args=['show-test-matrix', 'pr', '--grid'])
 ```
 
-Because a grid has two axes and a matrix may vary on more, a repository testing several dependency versions per job (a `click-version` axis, say) lands all of them on the same Python-by-runner intersection. Such a cell states how many jobs it stands for, `✅ stable ×5`, so it never reads as a single job. To break them apart, pivot onto the axes you care about:
+Because a grid has two axes and a matrix may vary on more, a repository testing several dependency versions per job (a `click-version` axis, say) lands all of them on the same Python-by-runner intersection. Such a cell states how many jobs it stands for, `✅ stable ×5`, so it never reads as a single job. This repository's own grid has one such cell: `✅ stable ×2` on the floor Python, where the `resolution` row shares the intersection of its twin. To break them apart, pivot onto the axes you care about:
 
 ```{click:run}
 invoke(repomatic, args=['show-test-matrix', '--grid', '--row-axis', 'os', '--col-axis', 'python-version'])
@@ -59,11 +59,13 @@ Both views honor the global `--table-format` option, so the same jobs render as 
 
 ### The raw GitHub Actions matrix
 
-For the matrix the [`metadata` job](workflows.md) hands to CI: the `os` and `python-version` axes plus the `include`/`exclude` directives that shape them, request the `test_matrix` (or `test_matrix_pr`) key from [`repomatic show-metadata`](cli.md):
+For the matrix the [`metadata` job](workflows.md) hands to CI, request the `test_matrix_pr` (or `test_matrix`) key from [`repomatic show-metadata`](cli.md). The pull-request matrix holds the `os` and `python-version` axes plus the `include`/`exclude` directives that shape them:
 
 ```{click:run}
-invoke(repomatic, args=['show-metadata', 'test_matrix', '--format', 'json'])
+invoke(repomatic, args=['show-metadata', 'test_matrix_pr', '--format', 'json'])
 ```
+
+A full matrix that carries a [`full-include`](configuration.md) row has another shape: a flat list with one entry per job, which GitHub runs as written. This repository's `test_matrix` is one.
 
 ## Choosing what to test
 
@@ -134,6 +136,30 @@ test-matrix.full-include = [
 ```
 
 Both produce the same jobs: released `acme` across every runner and Python, plus `4.2` and `5.0` on the single floor cell. The `full-include` rows join the full matrix only; the PR matrix ignores them. Reach for `variations` plus `exclude` when a pinned version should instead span every Python, as in the worked example below.
+
+### Run every declared floor in one cell
+
+A pinned version verifies one dependency. A project declares a floor for each direct dependency, and one cell for each of them does not scale. uv resolves them all at once: with [`--resolution lowest-direct`](https://docs.astral.sh/uv/concepts/resolution/#resolution-strategy), each direct dependency takes the lowest version its specifier allows, and each transitive one stays at its newest.
+
+The `tests` job of [`tests.yaml`](https://github.com/kdeldycke/repomatic/blob/main/.github/workflows/tests.yaml) resolves the project again in any cell that carries a `resolution` key, and appends the value to the job name. So one `full-include` row is the whole setup. Pin it to the floor Python of the fastest runner:
+
+```toml
+[tool.repomatic]
+test-matrix.full-include = [
+  { "os" = "ubuntu-26.04-arm", "python-version" = "3.10", "resolution" = "lowest-direct" },
+]
+```
+
+That cell fails when the code starts to call an API newer than a declared floor. This is the usual way a floor goes stale: a feature lands, the lockfile already holds the release that ships it, and nobody raises the specifier. The floors of the `test` group run too, because they are direct dependencies like the others.
+
+The cell cannot see two cases:
+
+- A dependency that another requirement holds above its floor. The resolver then installs the higher version, and the declared floor never runs. A test runner that needs a newer release than the project declares is the common cause.
+- A library that the tests replace with a mock. The suite then passes on any installed version.
+
+Check those two by hand: see [dependencies § Floor verification](dependencies.md#floor-verification).
+
+A repository whose own `tests.yaml` predates this step copies the step that reads `matrix.resolution` from the workflow linked above.
 
 ### Select runners by measured speed, not architecture
 
