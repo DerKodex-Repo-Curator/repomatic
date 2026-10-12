@@ -48,6 +48,7 @@
 - The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
 - The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
+- The bundled `repomatic-deps` skill now reads the whole `modernize` range off the lockfile when several `sync-uv-lock` pull requests merged since the last release.
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
 - The bundled `file-bug-report` skill now says not to offer a comment on an issue that a maintainer already answered as in progress.
 

@@ -292,7 +292,7 @@ Common false-positive patterns to reject early:
 
 1. **Find the version deltas.** Determine which dependencies changed, and from and to which version, cheapest source first:
 
-   - The most recent `sync-uv-lock` PR — its body lists every bump with its old and new version and a changelog or compare link per package. Find it with `gh pr list --search 'head:sync-uv-lock' --state all --limit 1`, then `gh pr view <number> --json body`.
+   - The most recent `sync-uv-lock` PR — its body lists every bump with its old and new version and a changelog or compare link per package. Find it with `gh pr list --search 'head:sync-uv-lock' --state all --limit 1`, then `gh pr view <number> --json body`. That body covers one sync only: when several merged since the last release tag, diff the lockfile against the tag to get the whole range.
    - Failing that, find the last release tag (`git tag --sort=-v:refname | head -1`) and diff the lockfile against it (`git diff <tag> -- uv.lock`), reading the version pairs.
    - For a single named package, read its locked version and the `pyproject.toml` floor.
 
