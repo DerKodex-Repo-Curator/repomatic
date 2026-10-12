@@ -33,7 +33,12 @@ from repomatic import lint_repo
 from repomatic.cli.main import repomatic
 from repomatic.cli.setup import show_metadata
 from repomatic.cloudflare_r2 import PAGES_MAX_FILE_SIZE
-from repomatic.config import Config, LabelsConfig, LintRepoConfig
+from repomatic.config import (
+    Config,
+    LabelsConfig,
+    LintRepoConfig,
+    load_repomatic_config,
+)
 from repomatic.github.token import PAT_PERMISSION_PROBES, probe_pat_permission
 from repomatic.http import FetchError
 from repomatic.labels import (
@@ -86,6 +91,7 @@ from repomatic.lint_repo import (
     missing_template_entries,
     repo_check_reference,
     run_repo_lint,
+    template_member_name,
 )
 from repomatic.matrix_axes import UNSTABLE_PYTHON_VERSIONS
 from repomatic.metadata.core import METADATA_VALUE_OPTIONS
@@ -774,11 +780,40 @@ def _template_carries(template: Mapping, path: str, member: str | None) -> bool:
             (("basket.fruits", "apple"), ("basket.weight", None)),
             id="nested-table",
         ),
+        pytest.param(
+            {"crates": [{"fruit": "apple", "ripe": True}]},
+            {"crates": [{"fruit": "pear", "ripe": True}]},
+            (("crates", '{ fruit = "apple", ripe = true }'),),
+            id="missing-table-member",
+        ),
+        pytest.param(
+            {"crates": [{"fruit": "apple", "ripe": True}]},
+            {"crates": [{"ripe": True, "fruit": "apple"}]},
+            (),
+            id="table-member-in-another-key-order",
+        ),
     ),
 )
 def test_missing_template_entries(template, local, expected):
     """Only absence is drift: a tuned value and a local addition are not."""
     assert tuple(missing_template_entries(template, local)) == expected
+
+
+@pytest.mark.parametrize(
+    ("member", "expected"),
+    (
+        pytest.param("apple", "apple", id="string"),
+        pytest.param(3, "3", id="number"),
+        pytest.param(
+            {"fruit": "apple", "crates": ["north", "south"], "ripe": True},
+            '{ fruit = "apple", crates = ["north", "south"], ripe = true }',
+            id="table",
+        ),
+    ),
+)
+def test_template_member_name(member, expected):
+    """A scalar is its own name, and a table is named by its inline TOML."""
+    assert template_member_name(member) == expected
 
 
 @pytest.mark.parametrize("comp", BOOTSTRAP_CONFIGS, ids=lambda c: c.name)
@@ -833,7 +868,7 @@ def test_bootstrap_config_drift_reads_the_pytest_legacy_table():
 
 def _template_leaves(
     table: Mapping, keys: tuple[str, ...] = ()
-) -> Iterator[tuple[tuple[str, ...], str | None]]:
+) -> Iterator[tuple[tuple[str, ...], object]]:
     """Yield each key of a template, then each member of a list it holds."""
     for key, value in table.items():
         if isinstance(value, Mapping):
@@ -842,14 +877,38 @@ def _template_leaves(
         yield (*keys, key), None
         if isinstance(value, list):
             for member in value:
-                yield (*keys, key), str(member)
+                yield (*keys, key), member
+
+
+def test_template_table_member_names_write_the_member():
+    """The name of a table must be TOML that writes that same table.
+
+    The name is what a maintainer pastes into the section. A name that parsed
+    to anything else would have them copy an entry the template does not hold,
+    and the warning would stay.
+    """
+    tables = [
+        (comp.source_file, member)
+        for comp in BOOTSTRAP_CONFIGS
+        for _, member in _template_leaves(
+            tomlrt.loads(get_data_content(comp.source_file))
+        )
+        if isinstance(member, Mapping)
+    ]
+    assert tables, "No seeded template holds a table in a list."
+    for source, member in tables:
+        name = template_member_name(member)
+        assert tomlrt.loads(f"member = {name}")["member"] == member, (
+            f"{source}: {name!r} does not write the table it names."
+        )
 
 
 def _reportable_entries() -> Iterator:
     """Every entry of a seeded template whose absence `lint-repo` reports."""
     for comp in BOOTSTRAP_CONFIGS:
         template = tomlrt.loads(get_data_content(comp.source_file))
-        for position, (keys, member) in enumerate(_template_leaves(template)):
+        for position, (keys, raw) in enumerate(_template_leaves(template)):
+            member = None if raw is None else template_member_name(raw)
             path = ".".join(keys)
             if (path, member) in comp.customizable_entries:
                 continue
@@ -882,7 +941,8 @@ def test_bootstrap_config_drift_declines_any_reportable_entry(comp, keys, member
     if member is None:
         del parent[keys[-1]]
     else:
-        parent[keys[-1]].remove(member)
+        members = parent[keys[-1]]
+        members.remove(next(m for m in members if template_member_name(m) == member))
 
     # The control: without the record, the absence is a warning.
     results = tuple(check_bootstrap_config_drift({comp.tool_name: local}))
@@ -1015,6 +1075,21 @@ def test_bootstrap_config_drift_roster_entry_reads_the_declined_table():
         lint_repo=_declining("pytest", "addopts", "--numprocesses=auto"),
     )
     assert [result.passed for result in check.results(ctx)] == [None, True]
+
+
+def test_bootstrap_config_drift_is_settled_in_this_repository():
+    """This repository carries or declines every entry of its seeded templates.
+
+    A declined table is keyed by its inline TOML, so the record stops applying
+    the day that rendering changes. The check then only warns, which nobody
+    reads on a green run.
+    """
+    pyproject = tomlrt.loads(
+        (Path(__file__).parent.parent / "pyproject.toml").read_text(encoding="UTF-8")
+    )
+    lint_repo = load_repomatic_config(pyproject).lint_repo
+    results = check_bootstrap_config_drift(pyproject["tool"], lint_repo)
+    assert [result.message for result in results if result.passed is False] == []
 
 
 def test_lint_context_carries_the_lint_repo_table(tmp_path, monkeypatch):

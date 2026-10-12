@@ -19,7 +19,9 @@
 - `repomatic run nuitka` now installs Nuitka into the project virtualenv, so its compile cache survives a change of `pyproject.toml` or `uv.lock`.
 - `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
 - `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
+- `lint-repo` now names a table that a seeded list lacks by the inline TOML that writes it, which is also its `lint-repo.declined` key.
 - The bundled `mypy` config now sets `check_untyped_defs`, which also type-checks the functions without annotations.
+- The bundled `mypy` config now skips imports into `sphinx.*`: Sphinx `9.1.0` syntax stopped the check of a project below Python 3.12.
 - The bundled `lychee` config now excludes `claude.ai` links, which a Cloudflare challenge hides from some crawlers.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.
 - Fix `lint-repo` advising to drop a bare `[tool.lychee] exclude` entry that no anchored form sits beside: it now names the anchored form to write instead.

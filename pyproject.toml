@@ -581,6 +581,9 @@ changelog.archive-location = "./docs/changelog-archive.md"
 # unreadable as the package does. The guide pages carry the prose and link here.
 docs.apidoc-extra-args = [ "--separate" ]
 exclude = [ "workflows" ]
+# No checked module imports Sphinx, so mypy would report the bundled override
+# as an unused section.
+lint-repo.declined.mypy.overrides.'{ module = ["sphinx.*"], ignore_missing_imports = true, follow_imports = "skip" }' = "No checked module imports Sphinx."
 # Render the Click command tree as roff `.1` files and attach a
 # `repomatic-manpages.tar.gz` asset to every GitHub release. The script target
 # mirrors `click_extra_manpages` in `docs/conf.py`, so the release tarball and

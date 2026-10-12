@@ -279,6 +279,8 @@ To decline an entry, name it under `lint-repo.declined` with the reason it stays
 pytest.addopts."--numprocesses=auto" = "The tests share one orchard fixture."
 # A whole key.
 mypy.warn_unreachable = "The harvest module branches on the season."
+# A table in a list: the path of the list, then the table as `lint-repo` prints it.
+mypy.overrides.'{ module = ["sphinx.*"], ignore_missing_imports = true, follow_imports = "skip" }' = "No orchard module imports Sphinx."
 ```
 
 `lint-repo` then reports the entry with its reason in place of the warning, so the decision stays visible. An entry names one key or one list member, never a whole section. An entry that declines nothing gets a warning of its own: the section took back what it names, or the template dropped it.

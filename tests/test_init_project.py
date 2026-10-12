@@ -408,7 +408,10 @@ _TEMPLATE_EXCLUDE_KEYS: dict[str, frozenset[str]] = {
     # adopting a repomatic release never fails a downstream build on a floor
     # its author never picked. This repository sets its own.
     "coverage": frozenset({"fail_under"}),
-    "mypy": frozenset(),
+    # The template skips imports into `sphinx.*`, for a project below Python
+    # 3.12 whose checked code imports Sphinx. No module checked here does, so
+    # this repository declines the entry under `lint-repo.declined`.
+    "mypy": frozenset({"overrides"}),
     "pytest": frozenset({"addopts"}),
     "ruff": frozenset({"extend-include"}),
     "typos": frozenset(),

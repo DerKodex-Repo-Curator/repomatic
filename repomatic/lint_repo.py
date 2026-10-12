@@ -2249,7 +2249,7 @@ def missing_template_entries(
     :param local: The repository's own section, parsed.
     :param prefix: Dotted path of the table being walked, for recursion.
     :return: `(path, None)` per missing key, `(path, member)` per missing list
-        member.
+        member, named by {func}`template_member_name`.
     """
     for key, expected in template.items():
         path = f"{prefix}{key}"
@@ -2262,7 +2262,27 @@ def missing_template_entries(
         elif isinstance(expected, list) and isinstance(found, list):
             for item in expected:
                 if item not in found:
-                    yield path, str(item)
+                    yield path, template_member_name(item)
+
+
+def template_member_name(member: object) -> str:
+    """Name one member of a template list the way a `lint-repo` line reads it.
+
+    A scalar is its own name. A table has no text of its own, so its name is
+    the inline table that writes it, like `{ fruit = "apple", ripe = true }`.
+    That is the text a maintainer copies into the section, or quotes as the key
+    of a {attr}`~repomatic.config.LintRepoConfig.declined` entry.
+
+    :param member: One item of a list held by a bundled template.
+    :return: The member as text, or as inline TOML when it is a table.
+    """
+    if not isinstance(member, Mapping):
+        return str(member)
+    plain = member.to_dict() if isinstance(member, tomlrt.Table) else dict(member)
+    # tomlrt renders a value only as part of a document, so the table is
+    # written under a throwaway key that is then cut off.
+    rendered = tomlrt.dumps({"member": tomlrt.Table.inline(plain)})
+    return rendered.removeprefix("member = ").rstrip("\n")
 
 
 _BARE_TOML_KEY = re.compile(r"[A-Za-z0-9_-]+")

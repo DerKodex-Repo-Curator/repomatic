@@ -579,6 +579,8 @@ class LintRepoConfig:
     pytest.addopts."--numprocesses=auto" = "The tests share one orchard fixture."
     # A whole key.
     mypy.warn_unreachable = "The harvest module branches on the season."
+    # A table in a list: the path of the list, then the table as `lint-repo` prints it.
+    mypy.overrides.'{ module = ["sphinx.*"], ignore_missing_imports = true, follow_imports = "skip" }' = "No orchard module imports Sphinx."
     ```
 
     A mapping rather than a list, following `lint-deps.allow`: the reason is
