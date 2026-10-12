@@ -274,6 +274,12 @@ Pull requests and issues still pending upstream.
 
 - [`MyST-Parser#1151` - Cross-reference to an explicit target emits a false-positive `myst.xref_missing` warning](https://github.com/executablebooks/MyST-Parser/issues/1151)
 
+- [`Nuitka#4087` - One new local variable makes every C file miss `ccache` since `4.3`](https://github.com/Nuitka/Nuitka/issues/4087): the canary build misses every file after a commit that adds or removes one frame type description. See [Compile caching](nuitka.md#compile-caching).
+
+  ```{todo}
+  When a Nuitka release carries the fix for [Nuitka/Nuitka#4087](https://github.com/Nuitka/Nuitka/issues/4087), add it to the matrix of the `ccache-type-description.yaml` workflow in [kdeldycke/nuitka-test](https://github.com/kdeldycke/nuitka-test), and run it. Then update this entry and [Compile caching](nuitka.md#compile-caching) to match the result.
+  ```
+
 - [`ruff#19421` - Failure to create cache key on invalid symlink](https://github.com/astral-sh/ruff/issues/19421)
 
 - [`sphinx#14623` - `todolist` produce duplicate titles for admonitions](https://github.com/sphinx-doc/sphinx/issues/14623)
