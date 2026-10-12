@@ -134,6 +134,7 @@ jobs:
         # relying on transparent emulation, so the windows-11-arm cell would silently test emulated x86_64 Python
         # instead of native ARM64. Setting UV_PYTHON to an architecture-qualified specifier forces uv (and uvx) to use
         # native ARM64 Python for all steps. (validate-arch checks the runner image, not this job's interpreter.)
+        # XXX: delete this step once the uv pin above reaches `0.13.0`. See https://repomatic.net/upstream#test-matrix
         if: runner.os == 'Windows' && runner.arch == 'ARM64'
         shell: bash
         env:

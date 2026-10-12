@@ -189,7 +189,18 @@ repomatic post-processes the output of `mdformat` to undo two `mdformat-myst` re
 
 ### Test matrix
 
-- [`uv#12906` - uv installs x86_64 Python on arm64 Windows](https://github.com/astral-sh/uv/issues/12906): `tests.yaml` forces a native ARM64 interpreter on the Windows ARM64 runner, which would otherwise test an emulated x86_64 Python.
+- [`uv#12906` - uv installs x86_64 Python on arm64 Windows](https://github.com/astral-sh/uv/issues/12906): `tests.yaml` forces a native ARM64 interpreter on the Windows ARM64 runner, which would otherwise test an emulated x86_64 Python. uv `0.13.0` prefers the native interpreter ([`uv#22100`](https://github.com/astral-sh/uv/pull/22100)), and the workflows pin an older uv.
+
+  ```{todo}
+  When `sync-workflow-pins` moves the uv pin of the `setup-uv` steps to `0.13.0` or later:
+
+  - Delete the `Force native ARM64 Python on Windows ARM64` step of `tests.yaml`, and the `UV_PYTHON` fallback in the `Install Python` step after it.
+  - Rewrite the `validate-arch` comment of `tests.yaml` that says uv prefers an x86_64 interpreter on aarch64.
+  - Build the two Windows binaries with `--managed-python` in a canary run of `_release-engine.yaml`. If both pass `verify-binary` and the self-tests, pass the flag on every platform.
+  - Delete this entry, and the example that names the step in the `repomatic-audit` skill.
+
+  When a Python version has no native build, uv `0.13.0` falls back to x86_64 with no error. The explicit request of the step fails there. Python 3.10 has none, and the test matrix already excludes it on `windows-11-arm`.
+  ```
 
 ### Nuitka binary builds
 
