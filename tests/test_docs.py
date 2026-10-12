@@ -235,6 +235,36 @@ def _write_index(
     )
 
 
+def _write_inline_index(docs: Path, package: str, subpackages: tuple[str, ...]) -> None:
+    """Write a package page the way `sphinx-apidoc` shapes it without `--separate`.
+
+    Its modules sit inline under `Submodules`, so only its subpackages get a
+    page of their own. A native MyST `toctree` fence lists them, and holds its
+    entries at the margin.
+    """
+    listed = "".join(f"{entry}\n" for entry in subpackages)
+    (docs / f"{package}.md").write_text(
+        f"# `{package}` package\n"
+        f"\n"
+        f"## Subpackages\n"
+        f"\n"
+        f"```{{toctree}}\n"
+        f":maxdepth: 4\n"
+        f"{listed}"
+        f"```\n"
+        f"\n"
+        f"## Submodules\n"
+        f"\n"
+        f"## `{package}.apple` module\n"
+        f"\n"
+        f"```{{eval-rst}}\n"
+        f".. automodule:: {package}.apple\n"
+        f"   :members:\n"
+        f"```\n",
+        encoding="UTF-8",
+    )
+
+
 def test_wire_api_pages_inserts_a_missing_entry(tmp_path):
     """A generated page absent from its parent toctree is listed, in order.
 
@@ -309,3 +339,44 @@ def test_wire_api_pages_reports_an_index_missing_its_section(tmp_path):
         "basket.apple: basket.md carries no Submodules toctree"
     ]
     assert (docs / "basket.md").read_text(encoding="UTF-8") == "# `basket` package\n"
+
+
+def test_wire_api_pages_reads_a_myst_toctree_fence(tmp_path):
+    """A page listed in a native MyST `toctree` fence counts as wired.
+
+    The fence holds its entries at the margin, where the reST directive that
+    `click_extra` wraps in an ``{eval-rst}`` block indents them.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    _write_inline_index(docs, "basket", ("basket.berry", "basket.citrus"))
+    for package in ("basket.berry", "basket.citrus"):
+        (docs / f"{package}.md").write_text(
+            f"# `{package}` package\n", encoding="UTF-8"
+        )
+    wired = (docs / "basket.md").read_text(encoding="UTF-8")
+
+    assert wire_api_pages_into_toctrees(docs) == []
+    assert (docs / "basket.md").read_text(encoding="UTF-8") == wired
+
+
+def test_wire_api_pages_lists_a_package_without_submodule_pages(tmp_path):
+    """A package page joins `Subpackages` even with no page below it.
+
+    Without `--separate`, `sphinx-apidoc` writes the modules of a package
+    inline, so its title is all that tells a package page from a module page.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    _write_inline_index(docs, "basket", ("basket.citrus",))
+    for package in ("basket.berry", "basket.citrus"):
+        (docs / f"{package}.md").write_text(
+            f"# `{package}` package\n", encoding="UTF-8"
+        )
+
+    assert wire_api_pages_into_toctrees(docs) == [
+        "basket.berry -> basket.md (Subpackages)"
+    ]
+    assert ":maxdepth: 4\nbasket.berry\nbasket.citrus\n```\n" in (
+        docs / "basket.md"
+    ).read_text(encoding="UTF-8")

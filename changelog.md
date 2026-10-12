@@ -26,6 +26,7 @@
 - Fix `fix-typos` failing on `certifi` in a dependency graph that includes `requests`: the bundled `typos` config now accepts it.
 - Fix `repomatic run ruff` and `repomatic run typos` ignoring the tool's exclude list for a file named on the command line.
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
+- Fix `update-docs` not reading a MyST `toctree` fence in an API index, and filing a package page that has no submodule pages under `Submodules`.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
 - Fix `sync-uv-lock` never pruning an `exclude-newer-package` entry whose key spells its package name differently from the lockfile.
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.

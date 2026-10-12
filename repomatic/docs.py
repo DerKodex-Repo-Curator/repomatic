@@ -116,8 +116,12 @@ def _run_docs_tool(label: str, *args: str, check: bool = False) -> int:
     return result.returncode
 
 
-TOCTREE_ENTRY_RE = re.compile(r"^\s+(\w+(?:\.\w+)+)\s*$", re.MULTILINE)
-"""A `toctree` entry of a generated index page: an indented dotted module name."""
+TOCTREE_ENTRY_RE = re.compile(r"^[ \t]*(\w+(?:\.\w+)+)\s*$", re.MULTILINE)
+"""A `toctree` entry of a generated index page: a dotted module name alone on its line.
+
+The reST directive that `click_extra` wraps in an ``{eval-rst}`` block indents
+its entries. A native MyST ``{toctree}`` fence holds them at the margin.
+"""
 
 
 def _toctree_entries(page: Path) -> set[str]:
@@ -141,8 +145,8 @@ def _insert_into_toctree(page: Path, section: str, entry: str) -> bool:
     except ValueError:
         return False
 
-    # The entries are the indented dotted names of the first toctree below the
-    # heading. Collect that one run, then splice the new name into it.
+    # The entries are the dotted names of the first toctree below the heading.
+    # Collect that one run, then splice the new name into it.
     run: list[int] = []
     for offset, line in enumerate(lines[start:], start=start):
         if TOCTREE_ENTRY_RE.fullmatch(line):
@@ -160,6 +164,17 @@ def _insert_into_toctree(page: Path, section: str, entry: str) -> bool:
     return True
 
 
+def _is_package_page(page: Path) -> bool:
+    """Whether a generated page documents a package rather than a module.
+
+    `sphinx-apidoc` titles a page `<name> package` or `<name> module`, and the
+    title is the one place that says which. Without `--separate` the modules of
+    a package sit inline in its page, so a package page has no page below it.
+    """
+    title = page.read_text(encoding="UTF-8").partition("\n")[0]
+    return title.startswith("# ") and title.rstrip().endswith(" package")
+
+
 def wire_api_pages_into_toctrees(docs_dir: Path) -> list[str]:
     """List every generated API page in the `toctree` of its parent index.
 
@@ -171,10 +186,11 @@ def wire_api_pages_into_toctrees(docs_dir: Path) -> list[str]:
     module, and it is the half {func}`click_extra.convert_rst_files_in_directory`
     cannot do, since that one only declines to overwrite an existing page.
 
-    A page goes under `Subpackages` when it is itself an index, and under
-    `Submodules` otherwise. An index missing the section it needs is left
-    alone and named in the return value, since inventing a heading would
-    guess at a page layout this function does not own.
+    A page goes under `Subpackages` when it documents a package: it is itself
+    an index, or its title says so. It goes under `Submodules` otherwise. An
+    index missing the section it needs is left alone and named in the return
+    value, since inventing a heading would guess at a page layout this function
+    does not own.
 
     :param docs_dir: The `docs/` directory holding the generated pages.
     :return: One `<page> -> <index>` line per entry inserted, plus a
@@ -209,7 +225,8 @@ def wire_api_pages_into_toctrees(docs_dir: Path) -> list[str]:
         if stem in _toctree_entries(index):
             continue
 
-        section = "Subpackages" if stem in indexes else "Submodules"
+        is_package = stem in indexes or _is_package_page(docs_dir / f"{stem}.md")
+        section = "Subpackages" if is_package else "Submodules"
         if _insert_into_toctree(index, section, stem):
             report.append(f"{stem} -> {parent}.md ({section})")
         else:
