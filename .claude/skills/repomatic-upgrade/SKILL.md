@@ -53,6 +53,7 @@ For each bullet outside the skip bin, find what it touches here. Grep the source
 - **A changed job.** Before you report it as adopted, call the released code on this repository's real inputs. An open pull request from that job shows only what its last run did, and that run can predate the adopted pin. A job that reads a file from another project also stops working when that file moves.
 - **A synced skill or subagent.** `repomatic init` rewrites every bundled copy verbatim, so the upgrade also reverts each local commit made to one since the last sync. Take every copy under `skills.location` and `subagents.location` as it stood before the upgrade. That is `HEAD` while the upgrade is uncommitted, and the upgrade commit's parent once it landed. Compare it with upstream's `.claude/skills/{name}/SKILL.md` or `.claude/agents/{name}.md` at `vOLD`. Read those paths, not `repomatic/data/skills/`: its entries are symlinks, and `git show` returns their target path. A copy that matches neither `vOLD` nor any upstream commit between the two tags carries local edits. The upgrade drops them, so report them as a `breaking` row.
 - **A new `lint-repo` check.** Run `<cmd> lint-repo --repo {owner}/{repo}` and read its line: a check that passes here offers nothing. Without `--repo`, a local run has no `$GITHUB_REPOSITORY`, so every API-backed check drops out of the output.
+- **A seeded tool config that lacks a bundled template entry.** `init` writes `[tool.ruff]`, `[tool.pytest]`, `[tool.coverage]`, `[tool.mypy]` and `[tool.mdformat]` once, and `lint-repo` names each entry such a section lacks. Copy the entry when it applies here. Record one that the repository leaves out on purpose under `[tool.repomatic] lint-repo.declined`, with the reason its instructions or comments give. Ask the user when no reason is stated. Never copy an entry only to silence the warning.
 
 Keep the two axes apart, as `/repomatic-audit` does: what the release offers is this skill, what the repository drifted from is that one. A local deviation the release does not touch belongs to the audit, not here.
 
@@ -72,7 +73,7 @@ Produce one table: changelog entry, bin (`breaking`, `adopt`, `drop`, `simplify`
 ### What not to touch
 
 - **An adoption that needs a token, a service or a new external setup.** List it with a recommendation and leave it to the user. Apply the `adopt` rows that need only configuration.
-- **A deviation `[tool.repomatic] exclude` or `include` records.** Those are decisions.
+- **A deviation `[tool.repomatic] exclude`, `include` or `lint-repo.declined` records.** Those are decisions.
 - **A major-version migration that needs broad rework.** Report it and stop.
 
 ### Next steps
