@@ -85,9 +85,12 @@ from repomatic.tooling.tool_runner import (
     _download_and_verify,
     _extract_binary,
     _install_binary,
+    _install_into_venv,
     _install_npm,
+    _installs_into_venv,
     _npm_supports_cooldown,
     _path_tools_env,
+    _venv_install_args,
     ensure_binary,
     find_unmodified_configs,
     get_data_file_path,
@@ -213,6 +216,10 @@ def test_tool_spec_integrity(name, spec):
     # module requires needs_venv (module invocation uses the venv's Python).
     if spec.module is not None:
         assert spec.needs_venv, f"{name}: module requires needs_venv=True"
+
+    # install_into_venv installs into the venv that needs_venv provides.
+    if spec.install_into_venv:
+        assert spec.needs_venv, f"{name}: install_into_venv requires needs_venv=True"
 
     # NativeFormat.FLAGS is mutually exclusive with file-based config: such tools
     # accept no config file and do not read [tool.X] natively.
@@ -401,7 +408,7 @@ def test_build_install_args_cooldown(name, spec, tmp_path, monkeypatch):
     ("name", "spec"),
     [(n, s) for n, s in TOOL_REGISTRY.items() if s.binary is None],
 )
-def test_uvx_tool_pins_registry_version(name, spec):
+def test_uvx_tool_pins_registry_version(name, spec, tmp_path, monkeypatch):
     """Every uvx-installed tool pins its `TOOL_REGISTRY` version in the command.
 
     Locks the invariant that keeps the per-tool command tests drift-proof: a
@@ -410,9 +417,104 @@ def test_uvx_tool_pins_registry_version(name, spec):
     silently goes stale on the next bump (a missed `pyproject-fmt` literal once
     reddened every Tests cell), so version-pinning is asserted here once,
     generically, against the shared builder rather than restated per tool.
+
+    The pin sits in the command that installs the tool. With a `uv.lock`, a
+    tool declaring `install_into_venv` is installed by its own command.
     """
     pin = f"{spec.package or spec.name}=={spec.version}"
-    assert pin in _build_install_args(spec), f"{name}: missing registry pin {pin!r}"
+    monkeypatch.chdir(tmp_path)
+    for locked in (False, True):
+        if locked:
+            (tmp_path / "uv.lock").touch()
+        command = (
+            _venv_install_args(spec, ".venv")
+            if _installs_into_venv(spec)
+            else _build_install_args(spec)
+        )
+        assert pin in command, (
+            f"{name}: missing registry pin {pin!r} (uv.lock: {locked})"
+        )
+
+
+@pytest.mark.parametrize(
+    ("name", "spec"),
+    [(n, s) for n, s in TOOL_REGISTRY.items() if s.install_into_venv],
+)
+def test_build_install_args_install_into_venv(name, spec, tmp_path, monkeypatch):
+    """A tool installed into the project venv runs from it, with no layer."""
+    monkeypatch.chdir(tmp_path)
+    pin = f"{spec.package or spec.name}=={spec.version}"
+
+    # Without a uv.lock there is no project venv to install into: the tool is
+    # layered over an isolated environment, like any other needs_venv tool.
+    assert not _installs_into_venv(spec)
+    unlocked = _build_install_args(spec)
+    assert unlocked[unlocked.index("--with") + 1] == pin
+
+    (tmp_path / "uv.lock").touch()
+    assert _installs_into_venv(spec)
+    locked = _build_install_args(spec)
+    assert "--with" not in locked
+    assert pin not in locked
+    # The install has synced the venv already.
+    assert locked[: locked.index("--")] == [
+        "uv",
+        "--no-progress",
+        "run",
+        "--frozen",
+        "--no-sync",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "spec"),
+    [(n, s) for n, s in TOOL_REGISTRY.items() if s.install_into_venv],
+)
+@patch("repomatic.tooling.tool_runner.subprocess.run")
+def test_install_into_venv_installs_the_pin(mock_run, name, spec):
+    """The pinned tool goes into the venv that `uv run --frozen` reports."""
+    mock_run.side_effect = [
+        MagicMock(returncode=0, stdout="/orchard/.venv\n"),
+        MagicMock(returncode=0),
+    ]
+
+    _install_into_venv(spec)
+
+    locate, install = (call.args[0] for call in mock_run.call_args_list)
+    assert locate[:4] == ["uv", "--no-progress", "run", "--frozen"]
+    assert install == [
+        "uv",
+        "--no-progress",
+        "pip",
+        "install",
+        "--python",
+        "/orchard/.venv",
+        f"{spec.package or spec.name}=={spec.version}",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("results", "message"),
+    [
+        # uv fails before it can report the venv.
+        ([(2, "")], "Cannot locate the project virtualenv"),
+        # uv succeeds and reports nothing.
+        ([(0, "\n")], "Cannot locate the project virtualenv"),
+        # The venv is found, and the install into it fails.
+        ([(0, "/orchard/.venv\n"), (1, "")], "Cannot install nuitka"),
+    ],
+)
+@patch("repomatic.tooling.tool_runner.subprocess.run")
+def test_install_into_venv_reports_a_uv_failure(mock_run, results, message):
+    """A uv failure stops the run before the tool starts."""
+    mock_run.side_effect = [
+        MagicMock(returncode=code, stdout=stdout) for code, stdout in results
+    ]
+
+    with pytest.raises(ClickException, match=message):
+        _install_into_venv(TOOL_REGISTRY["nuitka"])
+
+    assert mock_run.call_count == len(results)
 
 
 def test_datasource_url_by_backend():
@@ -2309,14 +2411,19 @@ def test_run_tool_nuitka_uses_module_invocation(
     """nuitka runs via `python -m nuitka` to avoid Windows script resolution issues."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "uv.lock").touch()
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(returncode=0, stdout="/orchard/.venv\n")
 
     run_tool("nuitka", extra_args=("repomatic",))
 
-    cmd = mock_run.call_args[0][0]
+    # Nuitka is installed into the project venv first, then runs from it.
+    locate, install, cmd = (call.args[0] for call in mock_run.call_args_list)
+    assert locate[-1] == "import sys; print(sys.prefix)"
+    assert install[2:6] == ["pip", "install", "--python", "/orchard/.venv"]
     assert cmd[0] == "uv"
     assert "run" in cmd
     assert "--frozen" in cmd
+    assert "--no-sync" in cmd
+    assert "--with" not in cmd
     python_idx = cmd.index("python")
     assert cmd[python_idx + 1] == "-m"
     assert cmd[python_idx + 2] == "nuitka"

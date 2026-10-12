@@ -16,6 +16,7 @@
 - A src-layout project now gets its binaries: each entry point compiles by name, through Nuitka's `--main-entry-point`. Set `nuitka.enabled = false` to build none.
 - `repomatic run nuitka` now turns off Nuitka's update check, which warned on each build made while a release newer than the pinned one existed.
 - `repomatic run nuitka` no longer stages a symlink-free copy of an `--include-data-dir` tree: Nuitka `4.3` ships the content of each link.
+- `repomatic run nuitka` now installs Nuitka into the project virtualenv, so its compile cache survives a change of `pyproject.toml` or `uv.lock`.
 - `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
 - `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.

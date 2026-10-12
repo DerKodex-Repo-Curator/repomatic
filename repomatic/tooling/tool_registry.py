@@ -710,6 +710,26 @@ class ToolSpec:
     (`uv run --no-project`), see `_build_install_args` in `tool_runner.py`.
     """
 
+    install_into_venv: bool = False
+    """If `True`, install the tool into the project venv before it runs.
+
+    Requires `needs_venv=True`. Without it, a `needs_venv` tool is layered over
+    the project venv with `uv run --with`, and uv keeps that layer in a
+    directory of its cache that it names at random.
+
+    ```{note}
+    Nuitka turns its own location into the `-I` flags of every C compilation,
+    and the compile cache keys on those flags. Under `uv run --with`, each
+    layer that uv builds again makes the next build miss every file. The
+    project venv sits at the same path on every runner, so a tool installed
+    there keeps its cache. `docs/nuitka.md` holds the measurements.
+    ```
+
+    The install stays in the venv after the run. `uv sync` removes it. In a
+    repository without a `uv.lock` the field has no effect, because the tool
+    then runs isolated from the project.
+    """
+
     computed_params: Callable[[Metadata], list[str]] | None = None
     """Callable that receives a `Metadata` instance and returns extra CLI args
     derived from project metadata (e.g., mypy's `--python-version` from
@@ -1741,6 +1761,9 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         config_docs_url="https://nuitka.net/doc/user-manual.html",
         cli_docs_url="https://nuitka.net/doc/user-manual.html",
         needs_venv=True,
+        # Nuitka's install path ends in its compile cache keys: see
+        # ToolSpec.install_into_venv.
+        install_into_venv=True,
         module="nuitka",
         native_format=NativeFormat.FLAGS,
         # Nuitka looks up its newest release on PyPI and warns when the running
@@ -1778,6 +1801,8 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
             repomatic reads every key from `[tool.nuitka]` and forwards it as a CLI flag: `true` becomes a bare `--flag`, a string or number becomes `--key=value`, and a list repeats the flag once per item. Nuitka `4.2` reads the section itself, but only under `--project` ([Nuitka#3909](https://github.com/Nuitka/Nuitka/issues/3909)). That mode takes its entry points from the project configuration, not from the command line, so repomatic keeps its own bridge.
 
             Binaries skip `tkinter` by default, via the `nuitka.nofollow-imports` setting of [`[tool.repomatic]`](configuration.md): set it to `[]` to bundle Tcl/Tk in a GUI project.
+
+            In a project with a `uv.lock`, repomatic installs Nuitka into the project virtualenv before the build, and Nuitka stays there until the next `uv sync`. The compile cache depends on that fixed path: see [Compile caching](nuitka.md#compile-caching).
             """),
     ),
     "oxipng": ToolSpec(

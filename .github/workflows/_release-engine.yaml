@@ -149,11 +149,9 @@ jobs:
       #   immutable binary. Skipping restore AND save on release commits
       #   keeps every published artifact compiled from source on a fresh VM;
       #   canary and weekly runs keep the warm-cache speed.
-      # - macOS is excluded entirely: its ccache scored 0/470 cross-VM hits
-      #   through every configuration channel tried (CCACHE_* env vars, then
-      #   ccache.conf inside this very cache dir), so persisting it only paid
-      #   restore/save overhead for entries that never hit. Capture Nuitka's
-      #   CCACHE_LOGFILE from a scheduled run to diagnose before re-enabling.
+      # - macOS is excluded entirely: the build step turns ccache off there,
+      #   so the directory would hold no compiled object to bring back. See
+      #   docs/nuitka.md for what re-enabling ccache on macOS would take.
       - name: Restore Nuitka compile cache
         if: >-
           matrix.platform_id != 'macos'
@@ -188,9 +186,8 @@ jobs:
           # as a relative path, so a work root that moves between machines
           # keeps its keys. Nuitka sets no base_dir itself:
           # https://github.com/Nuitka/Nuitka/issues/3996. base_dir cannot hide
-          # the randomly-named directory uv keeps the Nuitka environment in,
-          # which ends in Nuitka's -I flags: the cause of the macOS 0/470
-          # misses and of most Linux builds without a hit (docs/nuitka.md).
+          # a directory name that changes inside a path, which is why the tool
+          # runner installs Nuitka into the project venv: see docs/nuitka.md.
           printf 'base_dir = %s\n' "$(dirname "${RUNNER_WORKSPACE}")" \
             >> .nuitka-cache/ccache/ccache.conf
       # The manylinux containers ship no ccache (Nuitka warns and compiles
@@ -250,11 +247,12 @@ jobs:
         id: build-binary
         continue-on-error: true
         # The onefile build runs through `repomatic run nuitka`: the tool runner
-        # installs the pinned Nuitka, translates the [tool.nuitka] section to CLI
-        # flags, and prepends --mode=onefile. The matrix supplies the entry point
-        # to compile: Nuitka generates the launcher for it, as an installer
-        # does for a console script. User flags with spaces belong in
-        # [tool.nuitka], which the tool runner passes as a proper argv.
+        # installs the pinned Nuitka into the project venv, translates the
+        # [tool.nuitka] section to CLI flags, and prepends --mode=onefile. The
+        # matrix supplies the entry point to compile: Nuitka generates the
+        # launcher for it, as an installer does for a console script. User flags
+        # with spaces belong in [tool.nuitka], which the tool runner passes as a
+        # proper argv.
         env:
           MAIN_ENTRY_POINT: ${{ matrix.main_entry_point }}
           # Nuitka names its build folders after the project when no positional
