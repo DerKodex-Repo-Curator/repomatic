@@ -514,6 +514,7 @@ def _lookup(parsed: dict, key: str):
         ("ruff.toml", "show-fixes", True),
         ("ruff.toml", "lint.future-annotations", True),
         ("ruff.toml", "format.docstring-code-format", True),
+        ("mypy.toml", "check_untyped_defs", True),
         ("mypy.toml", "warn_unused_configs", True),
         ("mypy.toml", "warn_redundant_casts", True),
         ("mypy.toml", "warn_unused_ignores", True),

@@ -214,13 +214,13 @@ typing = [
 ]
 
 [tool.uv]
-# Floor uv at the minimum resolver repomatic relies on, with no upper bound.
-# astral-sh/setup-uv reads this automatically (its `version` input defaults to
-# the pyproject value) and installs the newest uv satisfying it, so CI and
+# Floor uv at the minimum resolver repomatic relies on, with no upper bound, so
 # contributors move forward without a manual ceiling bump each minor (a hard
 # upper cap breaks every machine the day the next uv minor lands, since uv
-# self-updates). uv.lock stays stable across minors because sync-uv-lock
-# discards a re-lock that only re-spells equivalent markers (see
+# self-updates). CI does not install from this floor: each astral-sh/setup-uv
+# step pins the exact uv it downloads, and sync-workflow-pins moves that pin
+# forward. uv.lock stays stable across minors because sync-uv-lock discards a
+# re-lock that only re-spells equivalent markers (see
 # repomatic.deps.uv.sync_uv_lock).
 required-version = ">=0.11.15"
 # Docs group requires Python >= 3.14 for recent MyST-Parser and click-extra features.

@@ -4,6 +4,8 @@
 # When merged into pyproject.toml via `repomatic init mypy`,
 # the [tool.mypy] prefix is added automatically.
 
+# Type-check the interior of functions that carry no type annotation.
+check_untyped_defs = true
 # Warn about unused '[mypy-*]' config sections.
 warn_unused_configs = true
 # Warn about casts that do nothing.

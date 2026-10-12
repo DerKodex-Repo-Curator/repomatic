@@ -19,6 +19,8 @@
 - `repomatic run nuitka` now installs Nuitka into the project virtualenv, so its compile cache survives a change of `pyproject.toml` or `uv.lock`.
 - `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
 - `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
+- The bundled `mypy` config now sets `check_untyped_defs`, which also type-checks the functions without annotations.
+- The bundled `lychee` config now excludes `claude.ai` links, which a Cloudflare challenge hides from some crawlers.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.
 - Fix `lint-repo` advising to drop a bare `[tool.lychee] exclude` entry that no anchored form sits beside: it now names the anchored form to write instead.
 - Fix `lint-repo` skipping its PAT repository-scope check on every run: the probe of another repository of the same owner now runs.
@@ -49,6 +51,7 @@
 - New upstream page tracks the pull requests and issues repomatic sends to the projects it depends on.
 - Give each release of the changelog and changelog archive pages a stable anchor made from its version, like `https://repomatic.net/changelog#v7-17-1`. The numbered `#id1` anchors, which moved with each release, are removed.
 - Document that mdformat also deletes backslash escapes and entities from a Markdown image's alt-text.
+- Document in the bundled `uv` config that CI installs the uv each `setup-uv` step pins, not the newest release above the floor.
 - The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
 - The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
