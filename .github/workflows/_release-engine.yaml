@@ -184,13 +184,13 @@ jobs:
           fi
           mkdir -p .nuitka-cache/ccache
           printf 'compiler_check = content\n' > .nuitka-cache/ccache/ccache.conf
-          # uv extracts packages into a randomly-named cache directory that
-          # can leak into Nuitka's -I flags, changing the hashed compiler
-          # arguments on every run: the proven root cause of the macOS 0/470
-          # misses (docs/nuitka.md). Reported upstream as
-          # https://github.com/Nuitka/Nuitka/issues/3996. base_dir makes
-          # ccache hash those paths relative to the runner work root, so
-          # keys survive across VMs.
+          # base_dir makes ccache hash every path below the runner work root
+          # as a relative path, so a work root that moves between machines
+          # keeps its keys. Nuitka sets no base_dir itself:
+          # https://github.com/Nuitka/Nuitka/issues/3996. base_dir cannot hide
+          # the randomly-named directory uv keeps the Nuitka environment in,
+          # which ends in Nuitka's -I flags: the cause of the macOS 0/470
+          # misses and of most Linux builds without a hit (docs/nuitka.md).
           printf 'base_dir = %s\n' "$(dirname "${RUNNER_WORKSPACE}")" \
             >> .nuitka-cache/ccache/ccache.conf
       # The manylinux containers ship no ccache (Nuitka warns and compiles
