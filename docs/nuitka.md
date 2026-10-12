@@ -77,10 +77,6 @@ The compile job resolves every input through a pinned, cooldown-gated channel: t
 
 The compile cache is the one input no cooldown concept covers, and it gets a structural control instead. GitHub scopes cache writes by ref, so fork pull requests can never write entries the engine restores; the residual writer set is code already running in main-ref workflows, which is why every action there is SHA-pinned and cooled. Against the remaining sliver (a cache entry is a tar archive extracted into the workspace, and a poisoned compiler object would flow silently into a signed, published, immutable binary), **release commits neither restore nor save the cache**: every published artifact compiles from source on a fresh VM, and cache contents can influence only throwaway canary and weekly builds. macOS additionally runs with ccache disabled, removing the one unchecksummed download (Nuitka's `ccache-4.2.1.zip` from nuitka.net, fetched with no hash at the call site, [Nuitka#3997](https://github.com/Nuitka/Nuitka/issues/3997)) from the pipeline.
 
-```{todo}
-Delete the `nuitka` entry of `[tool.uv] exclude-newer-package` in `pyproject.toml` on 2026-10-18. It admits Nuitka `4.3`, which the registry pinned two days after its release, and `4.3` clears `minimum-release-age` on 2026-10-17. `sync-uv-lock` prunes only the entries of packages the lockfile holds, and Nuitka is not one of them.
-```
-
 Detection layers back the prevention: artifact attestation binds every binary to the exact run that built it, `verify-binary` checks architecture and OS floors, the self-test executes the binary, and every release is submitted to VirusTotal. None of these would catch a competent backdoor on their own; the cold-release rule is what keeps them from having to.
 
 ## Link-time optimization

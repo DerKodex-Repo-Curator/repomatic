@@ -781,9 +781,10 @@ def sync_uv_lock_cmd(
         exclude-newer) in pyproject.toml from the bundled template, so every
         machine resolves the lockfile against the same uv floor and cooldown
       - prunes exclude-newer-package entries from pyproject.toml whose held
-        version has aged past the exclude-newer cutoff, then freezes the
-        survivors at their locked version (a fixed date) so the upgrade
-        holds them instead of tracking newer releases
+        version has aged past the exclude-newer cutoff, or whose own cutoff
+        has when the lock holds no version, then freezes the survivors at
+        their locked version (a fixed date) so the upgrade holds them
+        instead of tracking newer releases
       - prints a table of updated packages with upload dates
       - reports the cooldown-bypass lifecycle: entries pruned or frozen by
         the run, and each active freeze with the date it expires

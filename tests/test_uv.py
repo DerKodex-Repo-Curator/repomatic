@@ -314,6 +314,68 @@ def test_prune_stale_exclude_newer_packages_keeps_active_freeze(tmp_path):
     assert pyproject.read_text(encoding="UTF-8") == before
 
 
+YESTERDAY = "yesterday"
+"""Stands for a cutoff one day old, resolved in the test body.
+
+A timestamp computed at collection differs between xdist workers.
+"""
+
+
+@pytest.mark.parametrize(
+    ("entry", "packages", "pruned"),
+    [
+        pytest.param(
+            "2026-01-02T00:00:00Z", (), {"quince"}, id="aged-cutoff-not-locked"
+        ),
+        pytest.param(YESTERDAY, (), set(), id="fresh-cutoff-not-locked"),
+        pytest.param("0 day", (), set(), id="span-not-locked"),
+        # A bare date names a different instant on each machine: the freeze
+        # pass pins it to UTC first, and a later run prunes the pinned form.
+        pytest.param("2026-01-02", (), set(), id="bare-date-not-locked"),
+        # The lock holds the package from a git or path source: its entry
+        # waits for a release, whatever the age of the cutoff.
+        pytest.param(
+            "2026-01-02T00:00:00Z",
+            (("quince", "1.0.0.dev0", ""),),
+            set(),
+            id="aged-cutoff-locked-unreleased",
+        ),
+    ],
+)
+def test_prune_ages_an_entry_the_lock_does_not_hold_by_its_cutoff(
+    tmp_path, entry, packages, pruned
+):
+    """A package outside the lock has no held version, so its cutoff ages.
+
+    Once the rolling cutoff has passed a fixed timestamp, the entry admits no
+    release the cooldown still withholds, and it blocks every later one.
+    """
+    if entry == YESTERDAY:
+        entry = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+    pyproject = _write_uv_config(
+        tmp_path,
+        f'exclude-newer = "1 week"\nexclude-newer-package = {{ quince = "{entry}" }}\n',
+    )
+    lock = _write_lock(tmp_path, ("mango", "2.0.0", "2026-01-01T12:00:00Z"), *packages)
+    before = pyproject.read_text(encoding="UTF-8")
+    assert prune_stale_exclude_newer_packages(pyproject, lock) == pruned
+    if not pruned:
+        assert pyproject.read_text(encoding="UTF-8") == before
+
+
+def test_prune_matches_a_lock_name_in_any_spelling(tmp_path):
+    """An entry keyed by another spelling of the name still finds its release."""
+    pyproject = _write_uv_config(
+        tmp_path,
+        'exclude-newer = "1 week"\n'
+        'exclude-newer-package = { Lemon_Curd = "2026-01-03T00:00:00Z" }\n',
+    )
+    lock = _write_lock(tmp_path, ("lemon-curd", "2.0.0", "2026-01-01T12:00:00Z"))
+    assert prune_stale_exclude_newer_packages(pyproject, lock) == {"Lemon_Curd"}
+
+
 def test_prune_leaves_a_comment_naming_the_pruned_entry(tmp_path):
     """A partial prune keeps the table's comment, which still names the entry."""
     fresh = (datetime.now(timezone.utc) - timedelta(days=1)).strftime(
@@ -450,7 +512,7 @@ def test_freeze_exclude_newer_packages_window_absorbs_same_day_patch(tmp_path):
 
 
 def test_compute_bypass_forecasts_reports_freezes_only(tmp_path):
-    """Fixed-timestamp freezes get an expiry; spans and dropped deps do not."""
+    """Fixed-timestamp entries get an expiry; spans do not."""
     pyproject = _write_uv_config(
         tmp_path,
         'exclude-newer = "1 week"\n'
@@ -461,12 +523,15 @@ def test_compute_bypass_forecasts_reports_freezes_only(tmp_path):
     )
     lock = _write_lock(tmp_path, ("mango", "2.0.0", "2026-07-01T12:00:00Z"))
     forecasts = compute_bypass_forecasts(pyproject, lock)
-    # papaya is a permanent span and cherry left the lock: only mango shows.
-    assert len(forecasts) == 1
-    assert forecasts[0].name == "mango"
-    assert forecasts[0].held_version == "2.0.0"
+    # papaya is a permanent span: it has no row.
+    assert [forecast.name for forecast in forecasts] == ["cherry", "mango"]
+    # cherry left the lock, so it holds no version. Its own cutoff (2026-01-02)
+    # plus the lock's P1W span dates it.
+    assert forecasts[0].held_version == ""
+    assert forecasts[0].expires.startswith("2026-01-09")
+    assert forecasts[1].held_version == "2.0.0"
     # The held upload (2026-07-01) plus the lock's P1W span.
-    assert forecasts[0].expires.startswith("2026-07-08")
+    assert forecasts[1].expires.startswith("2026-07-08")
 
 
 def test_compute_bypass_forecasts_flags_unreleased_hold(tmp_path):
@@ -498,6 +563,19 @@ def test_compute_pruned_forecasts_snapshots_cleared_freezes(tmp_path):
     # The held upload (2026-01-01) plus the lock's P1W span, long past.
     assert records[0].expires.startswith("2026-01-08")
     assert compute_pruned_forecasts(set(), lock) == []
+
+
+def test_compute_pruned_forecasts_dates_an_unlocked_entry_by_its_cutoff(tmp_path):
+    """A cleared entry of a package outside the lock keeps its cutoff's expiry."""
+    lock = _write_lock(tmp_path, ("mango", "2.0.0", "2026-01-01T12:00:00Z"))
+    records = compute_pruned_forecasts(
+        {"quince"}, lock, cutoffs={"quince": "2026-01-02T00:00:00Z"}
+    )
+    assert len(records) == 1
+    assert records[0].name == "quince"
+    assert records[0].held_version == ""
+    # The cutoff (2026-01-02) plus the lock's P1W span.
+    assert records[0].expires.startswith("2026-01-09")
 
 
 def test_parse_lock_specifiers_isolates_unconditional_declarations() -> None:

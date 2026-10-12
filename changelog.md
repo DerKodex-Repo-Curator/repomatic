@@ -15,6 +15,7 @@
 - A src-layout project now gets its binaries: each entry point compiles by name, through Nuitka's `--main-entry-point`. Set `nuitka.enabled = false` to build none.
 - `repomatic run nuitka` now turns off Nuitka's update check, which warned on each build made while a release newer than the pinned one existed.
 - `repomatic run nuitka` no longer stages a symlink-free copy of an `--include-data-dir` tree: Nuitka `4.3` ships the content of each link.
+- `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
 - `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.
 - Fix `lint-repo` advising to drop a bare `[tool.lychee] exclude` entry that no anchored form sits beside: it now names the anchored form to write instead.
@@ -26,6 +27,7 @@
 - Fix `repomatic run ruff` and `repomatic run typos` ignoring the tool's exclude list for a file named on the command line.
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
+- Fix `sync-uv-lock` never pruning an `exclude-newer-package` entry whose key spells its package name differently from the lockfile.
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.
 - Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
 - Fix the two CLI self-test steps of the bundled `tests.yaml`, which every run skipped: they indexed `cli_scripts`, a space-separated string. A downstream copy of the workflow needs the same edit.

@@ -72,6 +72,7 @@ from click_extra import OperationTrail, echo, get_tool_config, resolve_jobs, run
 
 from .deps.dep_report import (
     BYPASS_COLUMNS,
+    BYPASS_NOT_LOCKED,
     EXCLUDE_NEWER_HELD_BACK_NOTE,
     HELD_BACK_COLUMNS,
     BypassForecast,
@@ -1432,7 +1433,11 @@ def print_bypass_table(ctx: Context, forecasts: list[BypassForecast]) -> None:
     echo("Cooldown bypasses:")
     headers = BYPASS_COLUMNS
     rows = [
-        (forecast.name, forecast.held_version, forecast.expires)
+        (
+            forecast.name,
+            forecast.held_version or BYPASS_NOT_LOCKED,
+            forecast.expires,
+        )
         for forecast in forecasts
     ]
     ctx.print_table(rows, headers)

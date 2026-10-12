@@ -432,6 +432,16 @@ ends once the package ships a release the lock can adopt. The markdown report
 renders the marker in italics to set it apart from real dates.
 """
 
+BYPASS_NOT_LOCKED = "not locked"
+"""Held-version placeholder for an entry whose package the lock does not hold.
+
+A tool the registry pins outside the lockfile, or a dependency the project
+dropped, has no locked version for the entry to hold. The entry still expires:
+`sync-uv-lock` prunes it once the rolling `exclude-newer` cutoff has passed the
+entry's own timestamp. The markdown report renders the marker in italics, like
+{data}`BYPASS_NEEDS_RELEASE`.
+"""
+
 
 @dataclass(frozen=True)
 class BypassForecast:
@@ -450,14 +460,17 @@ class BypassForecast:
     """Package name, as it appears on PyPI."""
 
     held_version: str
-    """Version the freeze holds in the lock."""
+    """Version the freeze holds in the lock. Empty when the lock holds no
+    version of the package, which the reports render as
+    {data}`BYPASS_NOT_LOCKED`."""
 
     expires: str
     """Date the freeze expires and the entry is pruned, with a human-readable
     countdown (`2026-07-08 (in 2 days)`, in the past for an already-cleared
     freeze), {data}`BYPASS_NEEDS_RELEASE` when the held version has no upload
     time in the lock, or empty when there is no rolling `exclude-newer` span
-    to forecast against."""
+    to forecast against. For a package the lock does not hold, the date is
+    projected from the entry's own cutoff."""
 
 
 BYPASS_SECTION_NOTE = (
@@ -492,7 +505,9 @@ def format_bypass_section(
     and expired entries this run removed from `pyproject.toml` are labelled
     `🧹 cleared:`, keeping the version and expiry data the freeze had. A
     freeze holding an unreleased version is labelled `🚧 unreleased:` and its
-    {data}`BYPASS_NEEDS_RELEASE` expiry renders in italics.
+    {data}`BYPASS_NEEDS_RELEASE` expiry renders in italics. An entry for a
+    package the lock does not hold shows {data}`BYPASS_NOT_LOCKED` in place of
+    a version.
 
     :param forecasts: Active freezes from
         {func}`repomatic.deps.uv.compute_bypass_forecasts`.
@@ -523,7 +538,11 @@ def format_bypass_section(
 
     rows: list[tuple[str, ...]] = []
     for forecast, marker in entries:
-        held = f"`{forecast.held_version}`"
+        held = (
+            f"`{forecast.held_version}`"
+            if forecast.held_version
+            else f"*{BYPASS_NOT_LOCKED}*"
+        )
         if marker == "cleared":
             held = f"🧹 cleared: {held}"
         elif marker == "frozen":

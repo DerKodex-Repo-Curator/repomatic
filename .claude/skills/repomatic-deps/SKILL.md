@@ -182,7 +182,7 @@ The `[tool.uv]` section may contain `exclude-newer-package` entries that exempt 
 
 What is left for this audit is the part no schedule settles:
 
-1. **Is the package still a dependency?** If it was removed from `[project].dependencies` and all `[dependency-groups]`, the entry is dead weight that no prune will ever reach, since pruning keys off the locked version's age and the package is no longer in the lock.
+1. **Is the package still a dependency?** If it was removed from `[project].dependencies` and all `[dependency-groups]`, a relative span on it is dead weight that no prune will ever reach. A fixed cutoff needs no audit there: `sync-uv-lock` prunes it once the cooldown window has passed the cutoff itself.
 2. **Is a hand-written exemption still justified?** A same-maintainer or in-repo package keeps its span indefinitely and correctly. An external package exempted during a migration that has since finished no longer needs one.
 3. **Does the comment explain the reason?** Like version floors, a hand-written exemption should carry a comment naming why the cooldown does not apply to it.
 

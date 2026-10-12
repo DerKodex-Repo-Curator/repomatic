@@ -273,14 +273,18 @@ def test_build_held_back_without_a_date():
 
 
 def test_format_bypass_section_covers_every_lifecycle_state():
-    """Active, frozen, cleared and unreleased freezes share one table."""
+    """Active, frozen, cleared, unreleased and unlocked entries share one table."""
     assert format_bypass_section(
         forecasts=[
             BypassForecast("apricot", "1.3.0", "2026-07-08 (in 2 days)"),
             BypassForecast("blueberry", "0.4.1", "2026-07-09 (in 3 days)"),
             BypassForecast("durian", "0.1.0", BYPASS_NEEDS_RELEASE),
+            BypassForecast("elderberry", "", "2026-07-10 (in 4 days)"),
         ],
-        pruned=[BypassForecast("cherry", "2.0.0", "2026-06-01")],
+        pruned=[
+            BypassForecast("cherry", "2.0.0", "2026-06-01"),
+            BypassForecast("fig", "", "2026-06-02"),
+        ],
         frozen=["blueberry"],
         name_urls={"apricot": "https://example.com/apricot"},
     ) == (
@@ -296,7 +300,9 @@ def test_format_bypass_section_covers_every_lifecycle_state():
         " 2026-07-08 (in 2 days) |\n"
         "| blueberry | 📌 frozen: `0.4.1` | 2026-07-09 (in 3 days) |\n"
         "| cherry | 🧹 cleared: `2.0.0` | 2026-06-01 |\n"
-        "| durian | 🚧 unreleased: `0.1.0` | *needs release* |"
+        "| durian | 🚧 unreleased: `0.1.0` | *needs release* |\n"
+        "| elderberry | *not locked* | 2026-07-10 (in 4 days) |\n"
+        "| fig | 🧹 cleared: *not locked* | 2026-06-02 |"
     )
 
 

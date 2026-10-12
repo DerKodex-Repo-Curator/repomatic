@@ -327,6 +327,28 @@ def _bare_date(value: str) -> date | None:
         return None
 
 
+def _fixed_cutoff(value: str) -> datetime | None:
+    """Parse an `exclude-newer-package` value that is a full fixed timestamp.
+
+    The instant an entry stops admitting releases, for the two passes that age
+    the entry itself and not a locked release:
+    {func}`prune_stale_exclude_newer_packages` and the expiry forecasts.
+
+    A relative span has no such instant: it tracks the latest release. A bare
+    `YYYY-MM-DD` date has one that depends on the timezone of the locking
+    machine (see {func}`date_to_utc_cutoff`), so it is not trusted here:
+    {func}`freeze_exclude_newer_packages` pins it to UTC in the same run, and
+    the next run reads the pinned form.
+
+    :param value: An `exclude-newer-package` entry value.
+    :return: The cutoff, or `None` when *value* is a span, a bare date, or
+        unparsable.
+    """
+    if _is_relative_span(value) or _bare_date(value) is not None:
+        return None
+    return parse_iso_datetime(value)
+
+
 def date_to_utc_cutoff(day: date) -> str:
     """Render an `exclude-newer-package` cutoff date as an explicit UTC instant.
 
@@ -625,8 +647,22 @@ def prune_stale_exclude_newer_packages(
     `exclude-newer` cutoff, meaning `uv lock --upgrade` would resolve to
     the same (or newer) version without the `"0 day"` override.
 
-    Packages without an upload time in the lock file (git or path sources)
-    are treated as permanent exemptions and never pruned.
+    Packages the lock holds without an upload time (git or path sources) are
+    treated as permanent exemptions and never pruned.
+
+    A package the lock does not hold at all has no locked version to age: a
+    tool the registry pins outside the lockfile, or a dependency the project
+    dropped. Its entry ages by its own cutoff instead. A fixed timestamp is
+    stale once the `exclude-newer` cutoff has passed it, because the entry then
+    admits no release the cooldown still withholds. A relative span never
+    ages, and stays.
+
+    ```{caution}
+    A fixed cutoff replaces the rolling window for its package: uv resolves
+    nothing uploaded after it. An entry left in place past its date therefore
+    blocks every later release of that package, which is why this pass removes
+    it and does not leave the cleanup to a reviewer.
+    ```
 
     :param pyproject_path: Path to the `pyproject.toml` file.
     :param lock_path: Path to the `uv.lock` file.
@@ -648,11 +684,24 @@ def prune_stale_exclude_newer_packages(
         )
         return set()
 
-    upload_times = LockFile.load(lock_path).upload_times
+    lock = LockFile.load(lock_path)
 
     stale: set[str] = set()
-    for pkg in pkg_table:
-        upload_str = upload_times.get(pkg, "")
+    for pkg, value in pkg_table.items():
+        if not lock.version_of(pkg):
+            # The lock holds no version of the package, so the entry ages by
+            # its own cutoff. See the docstring.
+            fixed = _fixed_cutoff(str(value))
+            if fixed is not None and fixed <= cutoff:
+                stale.add(pkg)
+                logging.info(
+                    f"Pruning {pkg}: not in the lock, and its cutoff {value} is"
+                    " before the cooldown cutoff."
+                )
+            else:
+                logging.debug(f"Keeping {pkg}: not in the lock, cutoff {value}.")
+            continue
+        upload_str = lock.upload_time_of(pkg)
         if not upload_str:
             # No upload time: git/path source, permanent exemption.
             logging.debug(f"Keeping {pkg}: no upload time in lock.")
@@ -818,6 +867,27 @@ class LockFile:
             exclude_newer=exclude_newer,
             cooldown_span=span,
         )
+
+    def version_of(self, name: str) -> str:
+        """Locked version of *name*, in any PEP 503 spelling.
+
+        uv writes every package under its canonical name, while an
+        `exclude-newer-package` key keeps the spelling its author typed.
+
+        :param name: A package name, in any spelling.
+        :return: The version, or empty when the lock does not hold the package.
+        """
+        return self.versions.get(canonicalize_name(name), "")
+
+    def upload_time_of(self, name: str) -> str:
+        """Upload time of the locked version of *name*, in any PEP 503 spelling.
+
+        :param name: A package name, in any spelling.
+        :return: The ISO 8601 upload time. Empty for a package the lock does
+            not hold, and for one it holds from a git or path source:
+            {meth}`version_of` tells the two apart.
+        """
+        return self.upload_times.get(canonicalize_name(name), "")
 
 
 def parse_lock_versions(lock_path: Path) -> dict[str, str]:
@@ -1125,6 +1195,27 @@ def _forecast_expiry(upload_str: str, span: timedelta | None, now: datetime) -> 
     return format_countdown(upload_dt + span, now)
 
 
+def _cutoff_expiry(value: str, span: timedelta | None, now: datetime) -> str:
+    """Format the date an entry's own cutoff ages past the rolling cooldown.
+
+    The counterpart to {func}`_forecast_expiry` for a package the lock does
+    not hold, where no upload time exists to project from. It mirrors the
+    condition {func}`prune_stale_exclude_newer_packages` applies to such an
+    entry: the fixed cutoff plus the rolling `exclude-newer` span.
+
+    :param value: The raw `exclude-newer-package` entry value.
+    :param span: The rolling `exclude-newer` span, or `None` when the cutoff
+        is absolute.
+    :param now: Reference instant for the relative hint.
+    :return: The humanized expiry, or empty when *value* is not a full fixed
+        timestamp or *span* is absent.
+    """
+    fixed = _fixed_cutoff(value)
+    if fixed is None or span is None:
+        return ""
+    return format_countdown(fixed + span, now)
+
+
 def compute_bypass_forecasts(
     pyproject_path: Path,
     lock_path: Path,
@@ -1136,14 +1227,15 @@ def compute_bypass_forecasts(
     spans (`"0 day"`) are permanent exemptions for packages with no PyPI
     release to age against (git or path sources), so they never expire and
     would repeat a static row in every report; auditing them is left to the
-    dependency review (see `docs/dependencies.md`). Entries for packages
-    absent from the lock (dropped dependencies) are skipped for the same
-    reason.
+    dependency review (see `docs/dependencies.md`).
 
     The expiry mirrors the {func}`prune_stale_exclude_newer_packages`
     condition: the held version's upload time plus the rolling
     `exclude-newer` span, which is the day the next `sync-uv-lock` run
-    prunes the entry.
+    prunes the entry. An entry for a package the lock does not hold has no
+    held version: its forecast carries an empty
+    {attr}`~repomatic.deps.dep_report.BypassForecast.held_version`, and an
+    expiry projected from the entry's own cutoff.
 
     :param pyproject_path: Path to the `pyproject.toml` file.
     :param lock_path: Path to the `uv.lock` file.
@@ -1155,18 +1247,17 @@ def compute_bypass_forecasts(
     """
     if lock is None:
         lock = LockFile.load(lock_path)
-    versions = lock.versions
-    uploads = lock.upload_times
     span = lock.cooldown_span
     now = datetime.now(timezone.utc)
     forecasts = []
     for pkg, value in sorted(_bypass_entries(pyproject_path).items()):
         if _is_relative_span(value):
             continue
-        held_version = versions.get(pkg, "")
-        if not held_version:
-            continue
-        expires = _forecast_expiry(uploads.get(pkg, ""), span, now)
+        held_version = lock.version_of(pkg)
+        if held_version:
+            expires = _forecast_expiry(lock.upload_time_of(pkg), span, now)
+        else:
+            expires = _cutoff_expiry(value, span, now)
         forecasts.append(BypassForecast(pkg, held_version, expires))
     return forecasts
 
@@ -1175,6 +1266,7 @@ def compute_pruned_forecasts(
     names: set[str],
     lock_path: Path,
     lock: LockFile | None = None,
+    cutoffs: dict[str, str] | None = None,
 ) -> list[BypassForecast]:
     """Snapshot the freezes a prune just cleared, for their `(cleared)` rows.
 
@@ -1188,6 +1280,9 @@ def compute_pruned_forecasts(
     :param lock_path: Path to the `uv.lock` file, still pre-upgrade.
     :param lock: Pre-parsed *lock_path*, to skip re-reading it. Must be the
         pre-upgrade state, for the reason above.
+    :param cutoffs: The `exclude-newer-package` values as they stood before
+        the prune, keyed by name. An entry for a package the lock does not
+        hold has no upload time to date it, so its expiry comes from here.
     :return: One record per pruned entry, sorted by package name, with the
         version the freeze held and the (past) date it expired.
     """
@@ -1195,15 +1290,17 @@ def compute_pruned_forecasts(
         return []
     if lock is None:
         lock = LockFile.load(lock_path)
+    span = lock.cooldown_span
     now = datetime.now(timezone.utc)
-    return [
-        BypassForecast(
-            pkg,
-            lock.versions.get(pkg, ""),
-            _forecast_expiry(lock.upload_times.get(pkg, ""), lock.cooldown_span, now),
-        )
-        for pkg in sorted(names)
-    ]
+    records = []
+    for pkg in sorted(names):
+        held_version = lock.version_of(pkg)
+        if held_version:
+            expires = _forecast_expiry(lock.upload_time_of(pkg), span, now)
+        else:
+            expires = _cutoff_expiry((cutoffs or {}).get(pkg, ""), span, now)
+        records.append(BypassForecast(pkg, held_version, expires))
+    return records
 
 
 # ---------------------------------------------------------------------------
@@ -1279,10 +1376,10 @@ def sync_uv_lock(lock_path: Path) -> SyncResult:
         the cooldown-bypass lifecycle (entries pruned, frozen, and still
         active with their expiry forecasts).
     """
-    # Step 1: Prune bypasses whose held version has aged past the cooldown
-    # (so uv resolves them normally again), then freeze the survivors at
-    # their locked version so the upgrade below holds them instead of
-    # tracking newer releases. Steps 1 and 2 all read the same pre-upgrade
+    # Step 1: Prune bypasses whose held version has aged past the cooldown,
+    # or whose own cutoff has when the lock holds no version (so uv resolves
+    # them normally again), then freeze the survivors at their locked version
+    # so the upgrade below holds them instead of tracking newer releases. Steps 1 and 2 all read the same pre-upgrade
     # lock through load_lock_data's cache (nothing writes it until Step 3);
     # `pre` is held for the passes that must keep answering pre-upgrade
     # questions after Step 3 has moved the file.
@@ -1293,10 +1390,14 @@ def sync_uv_lock(lock_path: Path) -> SyncResult:
     frozen: set[str] = set()
     stale_comments: list[str] = []
     if pyproject_path.exists():
+        # Read before the prune: a cleared entry takes its cutoff with it.
+        cutoffs = _bypass_entries(pyproject_path)
         pruned = prune_stale_exclude_newer_packages(pyproject_path, lock_path)
         # Snapshot the cleared freezes now, while the lock still holds the
         # versions the entries froze (see compute_pruned_forecasts).
-        pruned_records = compute_pruned_forecasts(pruned, lock_path, lock=pre)
+        pruned_records = compute_pruned_forecasts(
+            pruned, lock_path, lock=pre, cutoffs=cutoffs
+        )
         frozen = freeze_exclude_newer_packages(pyproject_path, lock_path)
         stale_comments = bypass_comment_mentions(pyproject_path, pruned)
         if stale_comments:
