@@ -31,8 +31,9 @@ failure here is a signal to re-read the docs page, not a bug in this repository.
 ```
 
 The scene is built under `tmp_path` with its own `CLAUDE_CONFIG_DIR`, and the
-plugin's remote is a `file://` URL onto a second scratch repository, so nothing
-leaves the machine and parallel workers cannot collide.
+plugin's remote is a `file://` URL onto a second scratch repository, so parallel
+workers cannot collide. Nothing leaves the machine either: the `egress` fixture
+turns off the CLI's own traffic and refuses whatever is left.
 """
 
 from __future__ import annotations
@@ -40,10 +41,16 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socketserver
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 pytestmark = [
     pytest.mark.skipif(
@@ -62,6 +69,54 @@ BUMPED_VERSION = "9.9.9"
 
 TIMEOUT = 120
 """Seconds any one CLI call may take before the probe fails instead of hanging."""
+
+OFFLINE_SWITCH = "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+"""The CLI's own setting for telemetry, error reports and update checks.
+
+Measured against Claude Code 2.1.284: each plugin command that changes
+something asks for `api.anthropic.com:443` once, and asks for nothing with this
+variable set.
+"""
+
+PROXY_VARIABLES = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+"""The variables the CLI reads to find its way out, in upper case."""
+
+
+@pytest.fixture
+def egress(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
+    """Keep the CLI on this machine, and collect what it still asks to reach.
+
+    The suite runs offline, and `tests/conftest.py` refuses every unmocked
+    call the Python side makes. The CLI is a child process with a client of its
+    own, which none of those stubs reach, so it gets two answers of its own.
+    {data}`OFFLINE_SWITCH` stops the calls at their source. A proxy that
+    forwards nothing takes whatever the switch does not cover, and keeps each
+    request line for the test to assert on.
+
+    :return: The request line of every call the proxy refused.
+    """
+    asked: list[str] = []
+
+    class Refusal(socketserver.StreamRequestHandler):
+        # A client that connects and stays silent must not hold the proxy.
+        timeout = 5
+
+        def handle(self) -> None:
+            asked.append(self.rfile.readline().decode("ISO-8859-1").strip())
+            self.wfile.write(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+
+    with socketserver.TCPServer(("127.0.0.1", 0), Refusal) as proxy:
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        address = f"http://127.0.0.1:{proxy.server_address[1]}"
+        monkeypatch.setenv(OFFLINE_SWITCH, "1")
+        for name in PROXY_VARIABLES:
+            monkeypatch.setenv(name, address)
+            monkeypatch.setenv(name.lower(), address)
+        # Only the loopback skips the proxy: nothing there leaves the machine.
+        for name in ("NO_PROXY", "no_proxy"):
+            monkeypatch.setenv(name, "localhost,127.0.0.1,::1")
+        yield asked
+        proxy.shutdown()
 
 
 def _claude(config: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -137,7 +192,9 @@ def _update_outcome(config: Path) -> str | None:
     return None
 
 
-def test_cli_update_detection_reads_the_plugin_manifest(tmp_path: Path) -> None:
+def test_cli_update_detection_reads_the_plugin_manifest(
+    tmp_path: Path, egress: list[str]
+) -> None:
     """Bump each version on its own and see which one the CLI reacts to.
 
     The four cases are one test rather than four parametrized ones because two of
@@ -215,4 +272,9 @@ def test_cli_update_detection_reads_the_plugin_manifest(tmp_path: Path) -> None:
     assert outcome_after(BUMPED_VERSION, BASE_VERSION) == "up_to_date", (
         "the CLI now reacts to the catalog entry's version; "
         "re-read docs/claude-code-plugin.md § How the pin moves"
+    )
+
+    assert not egress, (
+        f"the CLI asked a proxy for {sorted(set(egress))}, so {OFFLINE_SWITCH} no "
+        "longer keeps this scene on the machine; measure what it covers again"
     )
