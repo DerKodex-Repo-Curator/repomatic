@@ -52,6 +52,7 @@
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
 - The bundled `file-bug-report` skill now says not to offer a comment on an issue that a maintainer already answered as in progress.
 - The bundled `file-bug-report` skill now searches pull requests, recent threads, development branches and release notes before it calls a report new.
+- The bundled `file-bug-report` skill now says to run the reproducer in a second implementation, and to read each code of conduct to its end.
 
 ## [`7.17.1` (2026-09-30)](https://github.com/kdeldycke/repomatic/compare/v7.17.0...v7.17.1)
 
