@@ -27,6 +27,8 @@ from click.testing import CliRunner
 
 from repomatic.cli.main import repomatic
 from repomatic.github.ci_status import (
+    STABLE_GLYPH,
+    UNSTABLE_GLYPH,
     CIStatus,
     JobStatus,
     RunStatus,
@@ -35,6 +37,7 @@ from repomatic.github.ci_status import (
     read_ci_status,
     workflow_files,
 )
+from tests.conftest import WORKFLOWS_DIR, load_workflow
 
 
 def job(name: str, conclusion: str = "success", status: str = "completed"):
@@ -54,6 +57,13 @@ def run(*jobs: JobStatus, conclusion: str = "success", status: str = "completed"
     )
 
 
+UNEXPANDED_MATRIX_JOB = (
+    "${{ matrix.state == 'stable' && '✅' || '⁉️' }} ${{ matrix.os }} /"
+    " py${{ matrix.python-label || matrix.python-version }}"
+)
+"""The name of a matrix job GitHub never expanded: its `name:` expression."""
+
+
 # -- Job classification -------------------------------------------------------
 
 
@@ -69,11 +79,69 @@ def run(*jobs: JobStatus, conclusion: str = "success", status: str = "completed"
         # A non-matrix job carries no glyph and is required.
         ("Lint types", True),
         ("Sync pull request", True),
+        # A matrix GitHub never expanded keeps its `name:` expression, which
+        # spells both glyphs. Some of its cells are required, so it is.
+        pytest.param(UNEXPANDED_MATRIX_JOB, True, id="unexpanded matrix"),
+        pytest.param(
+            f"release / {UNEXPANDED_MATRIX_JOB}",
+            True,
+            id="unexpanded matrix behind a caller",
+        ),
     ),
 )
 def test_job_requirement_reads_the_glyph(name, required):
     """Classification keys off the glyph, never a positional field."""
     assert job(name).required is required
+
+
+def test_a_job_name_template_reads_as_required():
+    """Every job name that picks its glyph from the matrix is required unexpanded.
+
+    GitHub shows the `name:` expression as written for a matrix it never
+    expanded. Each of those templates holds both glyphs. One that held the
+    unstable glyph alone would read as a probe, and hide the required cells
+    that never ran.
+    """
+    templates = [
+        (path.name, job_id, str(definition.get("name") or ""))
+        for path in sorted(WORKFLOWS_DIR.glob("*.yaml"))
+        for job_id, definition in load_workflow(path.name).get("jobs", {}).items()
+    ]
+    stability_templates = [
+        (filename, job_id, name)
+        for filename, job_id, name in templates
+        if "${{" in name and (STABLE_GLYPH in name or UNSTABLE_GLYPH in name)
+    ]
+    # An empty population would make the loop below prove nothing.
+    assert stability_templates
+    for filename, job_id, name in stability_templates:
+        assert job(name).required, (
+            f"{filename}: an unexpanded {job_id!r} job reads as a probe. Its name"
+            f" template must hold both stability glyphs: {name!r}"
+        )
+
+
+def test_a_matrix_never_expanded_is_required():
+    """A run stopped before its matrix got its cells left required cells undone.
+
+    One cancelled job stands for the whole matrix, and every other job passed.
+    Reading that job as a probe makes the run green.
+    """
+    status = run(
+        job("🧬 Project metadata"),
+        job(UNEXPANDED_MATRIX_JOB, "cancelled"),
+        conclusion="cancelled",
+    )
+    assert status.verdict == "cancelled (1 required job(s))"
+    assert status.inconclusive is True
+
+
+def test_a_failed_matrix_never_expanded_blocks():
+    """A matrix that failed before it expanded is a required failure."""
+    status = run(job(UNEXPANDED_MATRIX_JOB, "failure"), conclusion="failure")
+    assert status.failed_probes == ()
+    assert status.blocking is True
+    assert status.verdict == "1 required job(s) failed"
 
 
 def test_probe_failure_does_not_block():

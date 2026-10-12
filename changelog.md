@@ -34,6 +34,7 @@
 - Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
 - Fix the two CLI self-test steps of the bundled `tests.yaml`, which every run skipped: they indexed `cli_scripts`, a space-separated string. A downstream copy of the workflow needs the same edit.
 - Fix `ci-status` reporting a cancelled run, or a run that ran no job, as `green`, and reading a workflow on a tip commit where it ran no job.
+- Fix `ci-status` counting a matrix job that GitHub never expanded as an allowed-failure probe: it is now a required job.
 - Fix the Docs workflow skipping a push that only changes `claude.md`, `license` or `.github/code-of-conduct.md`, which the documentation includes.
 - Every setup guide step now reads like the token step: one lead sentence, numbered actions, form fields in a table, and the long explanations left in `docs/`.
 - `job-timings`, `cancel-runs` and the `ci-status` fallback now list runs with a date filter, so a stale run listing no longer feeds them weeks-old runs.

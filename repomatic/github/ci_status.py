@@ -47,7 +47,8 @@ A job carrying no stability glyph is required. That covers every non-matrix job
 of a marker means the job was never optional rather than that its status is
 unknown. Only the two stability glyphs count: a job name may carry any other
 emoji and still be required, which is why the test is for `⁉️` specifically
-rather than for a decorated name.
+rather than for a decorated name. A name that holds both glyphs is the one
+exception: see {meth}`JobStatus.required`.
 """
 
 from __future__ import annotations
@@ -124,9 +125,14 @@ class JobStatus:
         build`). A leading-position test passes the first and silently files
         the second as required; splitting on `" / "` gets it wrong the other
         way round. Containment is the one form both satisfy, and the
-        templates emit exactly one glyph per name.
+        templates emit exactly one glyph per expanded name.
+
+        A name that holds both glyphs is a matrix GitHub never expanded: the
+        job keeps its `name:` expression, which spells the two of them. A run
+        stopped before the matrix got its cells leaves one. Some of those
+        cells are required, so the job is.
         """
-        return UNSTABLE_GLYPH not in self.name
+        return STABLE_GLYPH in self.name or UNSTABLE_GLYPH not in self.name
 
     @property
     def failed(self) -> bool:
