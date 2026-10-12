@@ -120,6 +120,7 @@ Read the full `pyproject.toml`. `lint-deps` already reports the specifier style,
 | Stale comment             | Comment references a reason that no longer applies (the cited method was replaced, or the Python version left the support matrix)                               |
 | Accreted comment          | Comment narrates superseded floors beside the declared one. Rewrite it around the version in force; `lint-deps` catches only the long ones                      |
 | Inflated floor            | Floor higher than the oldest version providing the APIs actually used (see [floor verification](#floor-verification) below)                                     |
+| Understated floor         | Floor lower than the oldest version the code runs on (see [lowest-version check](#lowest-version-check) below)                                                  |
 | Marker/rationale mismatch | Floor rationale contradicts the conditional marker (e.g., "Python 3.14 wheels" on a dep gated by `python_version<'3.11'` — that dep is never installed on 3.14) |
 | Section style             | `[project.optional-dependencies]` used where `[dependency-groups]` would be appropriate                                                                         |
 | Conditional markers       | Missing Python version marker for backport packages                                                                                                             |
@@ -133,6 +134,18 @@ Comments and changelogs can lie; the codebase is the source of truth. For each d
 2. **Determine the oldest version providing those APIs.** Check when the API was introduced — changelogs, release notes, or `pip index versions <pkg>` to see what exists on PyPI. A floor that rests on a behavior (comments kept, output formatting) needs a bisect instead, since a changelog can credit it to a later release than the one that shipped it. Run one probe per release with `uv run --no-project --exclude-newer '1 week' --with '<pkg>==<version>' python probe.py`, and compare each output byte for byte with the locked release.
 3. **Lower the floor** when it exceeds the oldest compatible version. Prefer conservative minimums (the major version that introduced the API) over aggressive ones. Update both the version specifier and the comment.
 4. **Run `uv lock`** after any floor change to verify the lock still resolves. Run it with the uv version the workflows pin on their `setup-uv` steps, like `uvx --exclude-newer '1 week' --from 'uv==X.Y.Z' uv lock`: a newer local uv rewrites the lockfile `revision` and adds tables that CI never writes. After a floor raised in one dependency group only, add `--upgrade-package <pkg>`: a group with its own `requires-python` resolves as a separate fork, and a plain `uv lock` keeps the old pin in the other one.
+
+#### Lowest-version check
+
+A floor can also be too low: the code calls an API that the declared version lacks. The lockfile holds the newest release of each dependency, so no ordinary test run shows it, and the first to see it is a user on an old environment.
+
+1. **Resolve every direct dependency at its floor.** Run `uv pip compile pyproject.toml --resolution lowest-direct --exclude-newer '1 week' --python-version <floor>`, with the lowest Python the project supports. It prints the set and installs nothing.
+2. **Compare the output with the declared floors.** A package resolved above its floor is held there by another requirement, so no install can reach the declared version. Report it as **Info**, with the requirement that holds it.
+3. **Run the suite on the lowest set.** In a throwaway `git worktree`, `uv sync --resolution lowest-direct --all-extras --group test` installs it and `uv run --frozen -- pytest` tests it. The sync rewrites `uv.lock`, so keep it out of the main checkout. When the test matrix carries a `lowest-direct` cell, read its last CI result instead.
+4. **Probe what the suite cannot see.** Two cases pass the suite and still break a user. The test tooling can hold a dependency above its floor, as pytest does for `packaging`. A mocked client hides the library behind it. For each one, write a script that makes the call the code makes, and run it against the floor: `uv run --no-project --exclude-newer '1 week' --with '<pkg>==<floor>' python probe.py`.
+5. **Raise a floor that fails**, to the first release that passes. Name the failing call in the comment.
+
+To test one floor alone, build an environment from the lockfile and swap that package in with `uv pip install --exclude-newer '1 week' --no-deps '<pkg>==<floor>'`. `uv run --with` resolves the package's own dependencies again, so a failure there can come from another package.
 
 #### Special cases
 
@@ -188,10 +201,10 @@ Produce:
 
 1. **Policy compliance summary**: A table with one row per dependency: name, specifier, has comment (yes/no), issues found.
 2. **Grouped findings** by severity:
-   - **Errors**: Wrong specifier style, missing version, upper bounds.
+   - **Errors**: Wrong specifier style, missing version, upper bounds, understated floors.
    - **Warnings**: Missing or stale comments, ordering issues, inflated floors, marker/rationale mismatches.
-   - **Info**: Suggestions for floor adjustments based on API verification or cross-repo data.
-3. **Suggested fixes**: For each error/warning, show the current line and the recommended replacement. For inflated floors, include the verified API minimum and a rewritten comment.
+   - **Info**: Suggestions for floor adjustments based on API verification or cross-repo data, and floors that no install can reach.
+3. **Suggested fixes**: For each error/warning, show the current line and the recommended replacement. For inflated floors, include the verified API minimum and a rewritten comment. For understated floors, include the failing call and the first release that passes.
 
 ---
 

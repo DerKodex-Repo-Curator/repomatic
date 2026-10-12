@@ -157,7 +157,7 @@ The cell cannot see two cases:
 - A dependency that another requirement holds above its floor. The resolver then installs the higher version, and the declared floor never runs. A test runner that needs a newer release than the project declares is the common cause.
 - A library that the tests replace with a mock. The suite then passes on any installed version.
 
-Check those two by hand: see [dependencies § Floor verification](dependencies.md#floor-verification).
+Check those two by hand: see [dependencies § Lowest-version check](dependencies.md#lowest-version-check).
 
 A repository whose own `tests.yaml` predates this step copies the step that reads `matrix.resolution` from the workflow linked above.
 

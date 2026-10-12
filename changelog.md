@@ -32,6 +32,7 @@
 - Document that mdformat also deletes backslash escapes and entities from a Markdown image's alt-text.
 - The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
+- The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
 
 ## [`7.17.1` (2026-09-30)](https://github.com/kdeldycke/repomatic/compare/v7.17.0...v7.17.1)

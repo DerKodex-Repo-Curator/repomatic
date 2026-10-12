@@ -172,6 +172,20 @@ Comments and changelogs can lie; the codebase is the source of truth. For each d
 3. **Lower the floor** when it exceeds the oldest compatible version. Prefer conservative minimums (the major version that introduced the API) over aggressive ones. Update both the version specifier and the comment.
 4. **Run `uv lock`** after any floor change to verify the lock still resolves. Run it with the uv version the workflows pin on their `setup-uv` steps, like `uvx --exclude-newer '1 week' --from 'uv==X.Y.Z' uv lock`: a newer local uv rewrites the lockfile `revision` and adds tables that CI never writes. After a floor raised in one dependency group only, add `--upgrade-package <pkg>`: a group with its own `requires-python` resolves as a separate fork, and a plain `uv lock` keeps the old pin in the other one.
 
+### Lowest-version check
+
+A floor can also be too low: the code calls an API that the declared version lacks. The lockfile holds the newest release of each dependency, so no ordinary test run shows it, and the first to see it is a user on an old environment.
+
+A [`lowest-direct` cell](test-matrix.md#run-every-declared-floor-in-one-cell) in the test matrix runs every declared floor on each push. To check by hand:
+
+1. **Resolve every direct dependency at its floor.** Run `uv pip compile pyproject.toml --resolution lowest-direct --exclude-newer '1 week' --python-version <floor>`, with the lowest Python the project supports. It prints the set and installs nothing.
+2. **Compare the output with the declared floors.** A package resolved above its floor is held there by another requirement, so no install can reach the declared version.
+3. **Run the suite on the lowest set.** In a throwaway `git worktree`, `uv sync --resolution lowest-direct --all-extras --group test` installs it and `uv run --frozen -- pytest` tests it. The sync rewrites `uv.lock`, so keep it out of the main checkout.
+4. **Probe what the suite cannot see.** Two cases pass the suite and still break a user. The test tooling can hold a dependency above its floor, as pytest does for `packaging`. A mocked client hides the library behind it. For each one, write a script that makes the call the code makes, and run it against the floor: `uv run --no-project --exclude-newer '1 week' --with '<pkg>==<floor>' python probe.py`.
+5. **Raise a floor that fails**, to the first release that passes. Name the failing call in the comment.
+
+To test one floor alone, build an environment from the lockfile and swap that package in with `uv pip install --exclude-newer '1 week' --no-deps '<pkg>==<floor>'`. `uv run --with` resolves the package's own dependencies again, so a failure there can come from another package.
+
 ### Special cases
 
 - **Backport packages** (like `tomli`, `exceptiongroup`) exist solely to provide a stdlib class to older Python versions. Their entire API is the backported class, available in all versions. The floor is typically `>=1` unless a specific bug fix is needed.
