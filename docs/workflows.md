@@ -16,7 +16,7 @@ on:
 
 jobs:
   lint:
-    uses: kdeldycke/repomatic/.github/workflows/lint.yaml@v7.17.0
+    uses: kdeldycke/repomatic/.github/workflows/lint.yaml@v7.17.1
 ```
 
 ### GitHub Actions limitations
@@ -99,6 +99,8 @@ This workflow runs on every push to `main` and on a **weekly schedule** so quiet
 - Only literal `runs-on:` values are rewritten. A value built from an expression draws on a matrix axis, which the axis owner moves
 - The announcement feed is deliberately not read. It reports what changed for anyone; the table reports what is true here, and only the second decides anything. The cost is that GitHub badges an image `deprecated` when deprecation *begins* rather than when it is announced, so a retirement surfaces months later than the feed would have shown it, still well before the image stops working
 - **Runs on**: the weekly schedule and manual `workflow_dispatch` only
+- **Requires**:
+  - `REPOMATIC_PAT` secret with workflows write permission: the pull request rewrites `.github/workflows/*.yaml`, which the default `GITHUB_TOKEN` cannot push
 - **Skipped if**:
   - A label is named in `[tool.repomatic.sync-runner-images] ignore`, which is how a declined proposal stays declined: a `sync-*` job regenerates on every run, so closing its pull request alone brings the proposal back
   - The *Available Images* table cannot be read or parsed, which fails closed
@@ -193,7 +195,7 @@ Collapse the job's two Ruff steps, `check` then `format`, into one invocation on
 #### 🔄 Sync repomatic (`sync-repomatic`)
 
 - Runs [`repomatic init --upgrade --delete-unmodified --delete-excluded`](https://github.com/kdeldycke/repomatic/blob/main/repomatic/init_project.py) to sync all repomatic-managed files: thin-caller workflows, configuration files, and skill definitions
-- Upgrades the repository once a newer `repomatic` release clears the [`minimum-release-age`](configuration.md#minimum-release-age) cooldown. The job hands off to that release through `uvx`, so the upstream `uses:` refs, the inline `repomatic==` pins and every managed file move in one pull request titled after that release, like `Upgrade repomatic to v7.17.0`
+- Upgrades the repository once a newer `repomatic` release clears the [`minimum-release-age`](configuration.md#minimum-release-age) cooldown. The job hands off to that release through `uvx`, so the upstream `uses:` refs, the inline `repomatic==` pins and every managed file move in one pull request titled after that release, like `Upgrade repomatic to v7.17.1`
 - The upgrade pull request lists the `**Breaking:**` and `**Deprecated:**` entries of every release it crosses, the warnings the new release printed (like a `[tool.repomatic]` key it no longer knows), the release notes, and the newer releases the cooldown still holds back
 - Never moves the upstream pin back: a release pinned by hand inside the cooldown stays, and the job only regenerates its files. Set `upstream-pin.sync = false` in `[tool.repomatic]` to keep syncing at the pinned release
 - Removes unmodified config files identical to bundled defaults and cleans up excluded or stale files (disabled opt-in workflows, auto-excluded skills)
@@ -355,7 +357,7 @@ Opt-in: `repomatic init` only materializes this file for a repository that set `
 - Warns without failing about each released section holding no entry. The GitHub release body is rebuilt from that section, so an empty one publishes an empty release. Add one bullet that names what moved, even when the whole cycle was mechanical (a pin bump or a regenerated file). An availability or editorial admonition does not count as an entry. The unreleased section is never flagged, since the post-release bump creates it empty
 - A sanity gate exits the job with status `2` (no file written, no PR opened) when the GitHub Releases or PyPI lookup looks unhealthy: a network error from GitHub combined with any existing GitHub coverage, or an empty PyPI response combined with three or more existing PyPI links. Without the gate, a transient API hiccup would silently strip every affected link from the changelog ([pypi/warehouse#1388](https://github.com/pypi/warehouse/issues/1388) and [pypi/warehouse#9536](https://github.com/pypi/warehouse/issues/9536) explain why a 404 or empty result from PyPI is not authoritative).
 - **Runs on**:
-  - Push to `main` (when `changelog.md`, `pyproject.toml`, or workflow files change). Skipped during release cycles.
+  - Push to `main` when `changelog.md`, a `pyproject.toml`, `uv.lock`, a workflow file, a Python file or a file under `docs/` changes. Skipped during release cycles.
   - After `release.yaml` workflow completes successfully (via `workflow_run` trigger), when the GitHub release is published and visible to the public API.
 
 #### 🎬 Prepare release (`prepare-release`)
@@ -370,7 +372,8 @@ Opt-in: `repomatic init` only materializes this file for a repository that set `
   - `bump-my-version` configuration in `pyproject.toml`
   - A `changelog.md` file
 - **Runs on**:
-  - Push to `main` (when `changelog.md`, `pyproject.toml`, or workflow files change)
+  - Push to `main` when `changelog.md`, a `pyproject.toml`, `uv.lock`, a workflow file, a Python file or a file under `docs/` changes
+  - After every `release.yaml` run on `main` (via `workflow_run` trigger): it re-bases the release PR after a push that matched none of the paths above, like one that only touches a skill or `readme.md`
   - Manual dispatch
   - `workflow_call` from downstream repositories
 
@@ -661,9 +664,10 @@ flowchart TD
   - Python package with [CLI entry points](https://docs.astral.sh/uv/concepts/projects/config/#entry-points) defined in `pyproject.toml`
 - **Skipped if** `[tool.repomatic] nuitka.enabled = false` is set in `pyproject.toml` (for projects with CLI entry points that don't need standalone binaries)
 - **Skipped for** branches that don't affect code:
+  - `format-images` (image formatting)
   - `format-json` (JSON formatting)
   - `format-markdown` (documentation formatting)
-  - `format-images` (image formatting)
+  - `format-shell` (shell script formatting)
   - `sync-gitignore` (`.gitignore` sync)
   - `sync-mailmap` (`.mailmap` sync)
   - `update-dep-graph` (dependency graph docs)

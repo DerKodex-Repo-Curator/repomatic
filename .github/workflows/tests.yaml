@@ -205,7 +205,7 @@ jobs:
         shell: bash
         run: |
           read -r script _ <<< "${CLI_SCRIPTS}"
-          uv run --frozen --no-progress -- click-extra test-suite --command "${script}" --jobs max
+          uv --no-progress run --frozen -- click-extra test-suite --command "${script}" --jobs max
       - name: Self-tests against test suite via python -m
         # Same suite as above, driven through the interpreter's `-m` entry
         # point so `__main__` stays exercised against the checkout on every
@@ -217,7 +217,7 @@ jobs:
         shell: bash
         run: |
           module=$(echo "$PACKAGE" | tr '-' '_')
-          uv run --frozen --no-progress -- click-extra test-suite --command "python -m ${module}" --jobs max
+          uv --no-progress run --frozen -- click-extra test-suite --command "python -m ${module}" --jobs max
 
   once-tests:
     name: 1️⃣ Run-once tests

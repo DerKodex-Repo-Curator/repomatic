@@ -30,7 +30,7 @@ from importlib.resources import as_file, files
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
 
@@ -58,7 +58,7 @@ def get_data_content(filename: str) -> str:
 
 
 @contextmanager
-def get_data_file_path(filename: str) -> Iterator[Path]:
+def get_data_file_path(filename: str) -> Generator[Path, None, None]:
     """Yield the filesystem path of a bundled data file.
 
     Unlike {func}`get_data_content` which returns string content, this yields

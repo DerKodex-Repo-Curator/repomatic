@@ -2886,6 +2886,28 @@ def test_fix_myst_directives_colon_fence_in_place(tmp_path):
     )
 
 
+def test_fix_myst_directives_skips_a_file_that_is_not_text(tmp_path):
+    """A file that does not decode as UTF-8 is not one mdformat wrote.
+
+    `run_tool` hands over every file whose content changed below a directory
+    argument, whoever wrote it: an editor that refreshes `.git/index` during
+    the run is enough. The page listed after the photo proves the loop goes on.
+    """
+    photo = tmp_path / "tart.jpeg"
+    photo.write_bytes(b"\xff\xd8\xff\xe0")
+    page = tmp_path / "pear-tart.md"
+    page.write_text(
+        "```{figure} tart.jpeg\n---\nalt: A pear tart\n---\n```\n", encoding="UTF-8"
+    )
+
+    _fix_myst_directives([str(photo), str(page)])
+
+    assert photo.read_bytes() == b"\xff\xd8\xff\xe0"
+    assert page.read_text(encoding="UTF-8") == (
+        "```{figure} tart.jpeg\n:alt: A pear tart\n```\n"
+    )
+
+
 def test_check_bypasses_post_process():
     """check_bypasses_post_process is True only for a post_process tool in check mode."""
     mdformat = TOOL_REGISTRY["mdformat"]

@@ -61,7 +61,7 @@ from ..release.binary import (
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Generator, Sequence
     from contextlib import AbstractContextManager
     from pathlib import Path
     from typing import Any
@@ -178,7 +178,7 @@ class GitMetadata:
         return False
 
     @contextmanager
-    def _restored_worktree(self) -> Iterator[None]:
+    def _restored_worktree(self) -> Generator[None, None, None]:
         """Save the repository state, and restore it however the body exits.
 
         Stashes any local changes and records the initial ref (the canonical

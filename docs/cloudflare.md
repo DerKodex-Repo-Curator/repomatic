@@ -6,7 +6,7 @@ Everything here was learned by operating real Pages projects, the expensive way 
 
 ## From a domain name to a published site
 
-The whole migration, given nothing but a domain in a Cloudflare account and a repository currently publishing to GitHub Pages. Seven steps, each one command, and the order matters: the site has to serve before anything is pointed at it.
+The whole migration, given nothing but a domain in a Cloudflare account and a repository currently publishing to GitHub Pages. Seven steps, and the order matters: the site has to serve before anything is pointed at it.
 
 1. **Create the Pages project**, named after the repository, which nothing else does for you:
 

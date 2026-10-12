@@ -57,7 +57,7 @@ from .releases import dev_release_url_and_previous_version
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Generator, Mapping
 
     from ..metadata.core import Metadata
 
@@ -769,7 +769,7 @@ def fit_github_body(body: str) -> str:
 
 
 @contextmanager
-def temp_body_file(body: str) -> Iterator[Path]:
+def temp_body_file(body: str) -> Generator[Path, None, None]:
     """Materialize a rendered body as a temporary file, then remove it.
 
     The `gh` CLI takes a body only through `--body-file`, so every write path

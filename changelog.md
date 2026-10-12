@@ -10,19 +10,36 @@
 - The `update-dep-graph` job moves from the release workflow to Autofix: it refreshes the graph on every push, for uv virtual projects too.
 - Add `dependency-graph.update` to turn off the dependency graph updates.
 - Add `lint-repo.declined` to record why a seeded tool config leaves out a bundled template entry, which `lint-repo` then stops warning about.
-- The bundled `tests.yaml` now resolves again any matrix cell that carries a `resolution` key, so a `lowest-direct` cell runs every declared dependency floor.
-- Relax the `arrow`, `boltons` and `pyyaml` floors to `>=1`, `>=19` and `>=6.0.1`.
-- Bump Nuitka from `4.2.2` to `4.3`.
-- A src-layout project now gets its binaries: each entry point compiles by name, through Nuitka's `--main-entry-point`. Set `nuitka.enabled = false` to build none.
-- `repomatic run nuitka` now turns off Nuitka's update check, which warned on each build made while a release newer than the pinned one existed.
-- `repomatic run nuitka` no longer stages a symlink-free copy of an `--include-data-dir` tree: Nuitka `4.3` ships the content of each link.
-- `repomatic run nuitka` now installs Nuitka into the project virtualenv, so its compile cache survives a change of `pyproject.toml` or `uv.lock`.
-- `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
-- `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
 - `lint-repo` now names a table that a seeded list lacks by the inline TOML that writes it, which is also its `lint-repo.declined` key.
+- `lint-repo` now fails on a `_redirects` rule that Cloudflare Pages can never apply: a source it cannot compile, a destination token it never replaces, or an exact rule that a pattern above it answers first.
+- The bundled `tests.yaml` now resolves again any matrix cell that carries a `resolution` key, so a `lowest-direct` cell runs every declared dependency floor.
+- A src-layout project now gets its binaries: each entry point compiles by name, through Nuitka's `--main-entry-point`. Set `nuitka.enabled = false` to build none.
+- `sync-uv-lock` now prunes the fixed `exclude-newer-package` cutoff of a package the lockfile does not hold, once the cooldown has passed it, and reports it as *not locked*.
+- Bump Nuitka from `4.2.2` to `4.3`, which ships the content of each symlink in an `--include-data-dir` tree: `repomatic run nuitka` no longer stages a symlink-free copy.
+- `repomatic run nuitka` now turns off Nuitka's update check, which warned on each build made while a release newer than the pinned one existed.
+- `repomatic run nuitka` now installs Nuitka into the project virtualenv, so its compile cache survives a change of `pyproject.toml` or `uv.lock`.
+- Relax the `arrow`, `boltons` and `pyyaml` floors to `>=1`, `>=19` and `>=6.0.1`.
 - The bundled `mypy` config now sets `check_untyped_defs`, which also type-checks the functions without annotations.
 - The bundled `mypy` config now skips imports into `sphinx.*`: Sphinx `9.1.0` syntax stopped the check of a project below Python 3.12.
 - The bundled `lychee` config now excludes `claude.ai` links, which a Cloudflare challenge hides from some crawlers.
+- Every setup guide step now reads like the token step: one lead sentence, numbered actions, form fields in a table, and the long explanations left in `docs/`.
+- `job-timings`, `cancel-runs` and the `ci-status` fallback now list runs with a date filter, so a stale run listing no longer feeds them weeks-old runs.
+- `cloudflare-r2 --offload` now writes why it dropped a file as Markdown in the step summary, with code-formatted names and a docs link.
+- The bundled `babysit-ci` and `repomatic-ship` skills now run their local tests with the `test` dependency group, which repositories without default groups need.
+- The bundled `babysit-ci` skill now says to dispatch `tests.yaml` when a version-bump commit cancels the runs of the commit under it.
+- The bundled `benchmark-update` skill now assesses every competitor cell of a row added since the last pass, and re-anchors pinned evidence links by content after a release.
+- The bundled `file-bug-report` skill now searches pull requests, recent threads, development branches and release notes before it calls a report new.
+- The bundled `file-bug-report` skill now says to run the reproducer in a second implementation, and to read each code of conduct to its end.
+- The bundled `file-bug-report` skill now says not to offer a comment on an issue that a maintainer already answered as in progress.
+- The bundled `repomatic-audit` and `repomatic-upgrade` skills now read a `lint-repo.declined` entry as a decision, and record there a template entry left out on purpose.
+- The bundled `repomatic-audit` skill now runs the adopted release's `init` in a throwaway worktree first, which compares every managed file at once.
+- The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
+- The bundled `repomatic-deps` skill now reads the whole `modernize` range off the lockfile when several `sync-uv-lock` pull requests merged since the last release.
+- The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
+- The bundled `repomatic-test-matrix` skill now says how to run every declared dependency floor in one `lowest-direct` cell.
+- The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
+- The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
+- The bundled `sphinx-docs` agent now says to fail a build on `myst.xref_missing` warnings with `click_extra_fail_on_warnings`, and never to suppress them.
 - Fix `lint-repo` reporting every bundled key missing from a `[tool.pytest]` section kept under `ini_options`, and asking for native keys pytest refuses beside that table.
 - Fix `lint-repo` advising to drop a bare `[tool.lychee] exclude` entry that no anchored form sits beside: it now names the anchored form to write instead.
 - Fix `lint-repo` skipping its PAT repository-scope check on every run: the probe of another repository of the same owner now runs.
@@ -34,34 +51,21 @@
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
 - Fix `update-docs` not reading a MyST `toctree` fence in an API index, and filing a package page that has no submodule pages under `Submodules`.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
-- Fix `sync-uv-lock` never pruning an `exclude-newer-package` entry whose key spells its package name differently from the lockfile.
+- Fix `sync-uv-lock` never freezing or pruning an `exclude-newer-package` entry whose key spells its package name differently from the lockfile.
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.
 - Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
 - Fix the two CLI self-test steps of the bundled `tests.yaml`, which every run skipped: they indexed `cli_scripts`, a space-separated string. A downstream copy of the workflow needs the same edit.
 - Fix `ci-status` reporting a cancelled run, or a run that ran no job, as `green`, and reading a workflow on a tip commit where it ran no job.
 - Fix `ci-status` counting a matrix job that GitHub never expanded as an allowed-failure probe: it is now a required job.
 - Fix the Docs workflow skipping a push that only changes `claude.md`, `license` or `.github/code-of-conduct.md`, which the documentation includes.
-- Every setup guide step now reads like the token step: one lead sentence, numbered actions, form fields in a table, and the long explanations left in `docs/`.
-- `job-timings`, `cancel-runs` and the `ci-status` fallback now list runs with a date filter, so a stale run listing no longer feeds them weeks-old runs.
-- `cloudflare-r2 --offload` now writes why it dropped a file as Markdown in the step summary, with code-formatted names and a docs link.
-- The workflows reference now lists every `lint-repo` check, rendered from the check roster like `lint-repo --help`.
-- The bundled `benchmark-update` skill now assesses every competitor cell of a row added since the last pass, and re-anchors pinned evidence links by content after a release.
-- The bundled `babysit-ci` and `repomatic-ship` skills now run their local tests with the `test` dependency group, which repositories without default groups need.
-- The bundled `babysit-ci` skill now says to dispatch `tests.yaml` when a version-bump commit cancels the runs of the commit under it.
-- The bundled `repomatic-audit` and `repomatic-upgrade` skills now read a `lint-repo.declined` entry as a decision, and record there a template entry left out on purpose.
-- The bundled `repomatic-audit` skill now runs the adopted release's `init` in a throwaway worktree first, which compares every managed file at once.
+- Fix the bundled `babysit-ci` skill pointing at a matrix `exclude` section that the bundled `tests.yaml` does not have: it now names `repomatic show-test-matrix`.
+- Fix the bundled `repomatic-deps` skill saying that a same-maintainer package keeps its `exclude-newer-package` span: only a git or path source does.
+- Fix four statements of the bundled `sphinx-docs` agent: what `nitpicky` does, how to enable `autosectionlabel`, which page holds the dependency graph, and a `uvx` command with no cooldown.
 - New upstream page tracks the pull requests and issues repomatic sends to the projects it depends on.
 - Give each release of the changelog and changelog archive pages a stable anchor made from its version, like `https://repomatic.net/changelog#v7-17-1`. The numbered `#id1` anchors, which moved with each release, are removed.
+- The workflows reference now lists every `lint-repo` check, rendered from the check roster like `lint-repo --help`.
 - Document that mdformat also deletes backslash escapes and entities from a Markdown image's alt-text.
 - Document in the bundled `uv` config that CI installs the uv each `setup-uv` step pins, not the newest release above the floor.
-- The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
-- The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
-- The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
-- The bundled `repomatic-deps` skill now reads the whole `modernize` range off the lockfile when several `sync-uv-lock` pull requests merged since the last release.
-- The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
-- The bundled `file-bug-report` skill now says not to offer a comment on an issue that a maintainer already answered as in progress.
-- The bundled `file-bug-report` skill now searches pull requests, recent threads, development branches and release notes before it calls a report new.
-- The bundled `file-bug-report` skill now says to run the reproducer in a second implementation, and to read each code of conduct to its end.
 
 ## [`7.17.1` (2026-09-30)](https://github.com/kdeldycke/repomatic/compare/v7.17.0...v7.17.1)
 

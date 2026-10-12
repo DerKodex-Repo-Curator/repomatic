@@ -42,7 +42,7 @@ from tests.conftest import pat_results
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from unittest.mock import MagicMock
 
 # A neutral slug fed through GITHUB_REPOSITORY so Metadata resolves the repo
@@ -73,7 +73,7 @@ def _offline_setup_guide(
     pypi_ok: CheckResult | None = None,
     pages_ok: CheckResult | None = None,
     owner_type: str = "User",
-) -> Iterator[tuple[MagicMock, list[str]]]:
+) -> Generator[tuple[MagicMock, list[str]], None, None]:
     """Patch every network seam `manage_setup_guide` reaches.
 
     Each check passes by default, so the issue closes unless an argument

@@ -40,6 +40,8 @@ You help users understand and maintain their project's dependencies. This skill 
 
 The `autofix.yaml` workflow's `update-dep-graph` job regenerates the dependency graph on every push, for packages and uv virtual projects alike. This mode is useful for **interactive analysis** — understanding the graph, spotting concerns, or generating it before pushing.
 
+With `[tool.repomatic] dependency-graph.update = false`, the `update-dep-graph` command exits without writing a graph, and the job opens no pull request. Tell the user so, and skip this mode.
+
 ### Argument handling
 
 - Pass remaining arguments through to `<cmd> update-dep-graph`.
@@ -88,7 +90,7 @@ These conventions are derived from the `pyproject.toml` files across all `kdeldy
    # requests 2.32.0 fixes CVE-2024-35195 (session credential leak on redirects).
    "requests>=2.32",
    ```
-3. **Python version support is not a valid reason to bump a floor.** The dependency resolver already picks the right version via `requires-python` metadata. If `boltons>=20` works and boltons 25 merely adds Python 3.13 support, keep `>=20` — the resolver handles it. **Exception:** when a dependency *drops* a Python version your project still supports (or your project drops one, aligning minimum `requires-python`), that alignment is a valid floor bump reason. The comment should state the version range alignment, not the Python support:
+3. **Python version support is not a valid reason to bump a floor.** The dependency resolver already picks the right version via `requires-python` metadata. If `mango>=2` works and mango 5 merely adds Python 3.13 support, keep `>=2` — the resolver handles it. **Exception:** when a dependency *drops* a Python version your project still supports (or your project drops one, aligning minimum `requires-python`), that alignment is a valid floor bump reason. The comment should state the version range alignment, not the Python support:
    ```toml
    # coverage 7.11.0 dropped Python 3.9, matching our requires-python >= 3.10.
    "coverage>=7.11",
@@ -178,12 +180,12 @@ These comment patterns typically signal a floor set at adoption or auto-bump tim
 
 The `[tool.uv]` section may contain `exclude-newer-package` entries that exempt specific packages from the global `exclude-newer` cooldown window. They arrive from two places: written by hand (the package is published by the same maintainer, or is developed in-repo), or written by `audit --fix`, which reaches a CVE fix still inside the window through an entry rather than lifting `exclude-newer` for the whole tree.
 
-**Expiry is mechanical, so do not audit for it.** `sync-uv-lock` owns the lifecycle of every entry and reports each move in its PR body: it rewrites a relative span (`"0 day"`) into a fixed cutoff pinned to the locked version's upload time, which *holds* the package instead of letting it track latest, then prunes the entry outright once that held version ages past the global cooldown and the package rejoins normal resolution. A live fixed cutoff is therefore a freeze doing its job, not a leftover: proposing its deletion un-holds a package the freeze was deliberately pinning. A surviving relative span means the freeze has not run yet, not that a span is the steady state.
+**Expiry is mechanical, so do not audit for it.** `sync-uv-lock` owns the lifecycle of every entry and reports each move in its PR body: it rewrites a relative span (`"0 day"`) into a fixed cutoff pinned to the locked version's upload time, which *holds* the package instead of letting it track latest, then prunes the entry outright once that held version ages past the global cooldown and the package rejoins normal resolution. A live fixed cutoff is therefore a freeze doing its job, not a leftover: proposing its deletion un-holds a package the freeze was deliberately pinning. A surviving relative span means the freeze has not run yet, except on a package with no upload time in the lockfile: one consumed from a git or path source, or one the lockfile does not hold. That span stays as written.
 
 What is left for this audit is the part no schedule settles:
 
 1. **Is the package still a dependency?** If it was removed from `[project].dependencies` and all `[dependency-groups]`, a relative span on it is dead weight that no prune will ever reach. A fixed cutoff needs no audit there: `sync-uv-lock` prunes it once the cooldown window has passed the cutoff itself.
-2. **Is a hand-written exemption still justified?** A same-maintainer or in-repo package keeps its span indefinitely and correctly. An external package exempted during a migration that has since finished no longer needs one.
+2. **Is a hand-written exemption still justified?** A package consumed from a git or path source keeps its span indefinitely and correctly. A same-maintainer package on an index does not: its entry admits one release, and is written again for the next one that must not wait. An external package exempted during a migration that has since finished no longer needs one.
 3. **Does the comment explain the reason?** Like version floors, a hand-written exemption should carry a comment naming why the cooldown does not apply to it.
 
 Flag those as warnings. Never flag an entry merely for existing or for looking old.

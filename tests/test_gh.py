@@ -294,7 +294,6 @@ def test_401_fallback_also_fails():
     """When fallback also fails, original 401 error is raised."""
     with (
         patch("repomatic.github.gh.run") as mock_run,
-        patch("repomatic.github.status.status_annotation", return_value=""),
         patch.dict(
             "os.environ",
             {"GH_TOKEN": "expired-pat", "GITHUB_TOKEN": "gha-token"},

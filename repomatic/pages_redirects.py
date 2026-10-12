@@ -80,7 +80,7 @@ SPLAT_REGEX = re.compile(r"\*")
 PLACEHOLDER_REGEX = re.compile(r":[A-Za-z]\w*")
 
 # What a source captures, in the order the server replaces it in a destination.
-SOURCE_TOKEN_REGEX = re.compile(r"\*|:[A-Za-z]\w*")
+SOURCE_TOKEN_REGEX = re.compile(f"{SPLAT_REGEX.pattern}|{PLACEHOLDER_REGEX.pattern}")
 
 URL_REGEX = re.compile(r"^https://+(?P<host>[^/]+)/?(?P<path>.*)")
 HOST_WITH_PORT_REGEX = re.compile(r".*:\d+$")

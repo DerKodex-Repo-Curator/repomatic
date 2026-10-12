@@ -104,7 +104,7 @@ from repomatic.registry import (
 )
 from repomatic.release.prepare_release import SELF_PIN_COOLDOWN_EXEMPTION
 from repomatic.tooling.bundle import get_data_content
-from tests.conftest import metadata_from_pyproject, pat_results
+from tests.conftest import PROJECT_ROOT, metadata_from_pyproject, pat_results
 
 
 def test_successful_fetch():
@@ -1085,7 +1085,7 @@ def test_bootstrap_config_drift_is_settled_in_this_repository():
     reads on a green run.
     """
     pyproject = tomlrt.loads(
-        (Path(__file__).parent.parent / "pyproject.toml").read_text(encoding="UTF-8")
+        (PROJECT_ROOT / "pyproject.toml").read_text(encoding="UTF-8")
     )
     lint_repo = load_repomatic_config(pyproject).lint_repo
     results = check_bootstrap_config_drift(pyproject["tool"], lint_repo)
@@ -2211,10 +2211,7 @@ def test_pat_permission_probe_pass(probe):
 @pytest.mark.parametrize("probe", PAT_PERMISSION_PROBES, ids=lambda p: p.field)
 def test_pat_permission_probe_fail_403(probe):
     """Fail with the missing-permission message when the API call 403s."""
-    with (
-        patch("repomatic.github.token.run_gh_command") as mock_gh,
-        patch("repomatic.github.status.status_annotation", return_value=""),
-    ):
+    with patch("repomatic.github.token.run_gh_command") as mock_gh:
         mock_gh.side_effect = RuntimeError("HTTP 403: Forbidden")
         passed, msg = probe_pat_permission("owner/repo", probe)
         assert passed is False
@@ -2229,10 +2226,7 @@ def test_pat_vulnerability_alerts_permission_404():
         for probe in PAT_PERMISSION_PROBES
         if probe.field == "vulnerability_alerts"
     )
-    with (
-        patch("repomatic.github.token.run_gh_command") as mock_gh,
-        patch("repomatic.github.status.status_annotation", return_value=""),
-    ):
+    with patch("repomatic.github.token.run_gh_command") as mock_gh:
         mock_gh.side_effect = RuntimeError("HTTP 404: Not Found")
         passed, msg = probe_pat_permission("owner/repo", vuln_probe)
         assert passed is False
@@ -2242,10 +2236,7 @@ def test_pat_vulnerability_alerts_permission_404():
 
 def test_pat_check_non_403_surfaces_raw_error():
     """A 401 from an upstream incident surfaces the raw stderr, not a scope hint."""
-    with (
-        patch("repomatic.github.token.run_gh_command") as mock_gh,
-        patch("repomatic.github.status.status_annotation", return_value=""),
-    ):
+    with patch("repomatic.github.token.run_gh_command") as mock_gh:
         mock_gh.side_effect = RuntimeError("HTTP 401: Requires authentication")
         passed, msg = probe_pat_permission("owner/repo", PAT_PERMISSION_PROBES[0])
         assert passed is False
@@ -3272,9 +3263,7 @@ def test_check_description_opens_on_its_severity(check):
 
 def test_workflows_page_renders_every_check():
     """The `lint-repo` job docs render the roster rather than a hand-kept list."""
-    page = (Path(__file__).parent.parent / "docs" / "workflows.md").read_text(
-        encoding="UTF-8"
-    )
+    page = (PROJECT_ROOT / "docs" / "workflows.md").read_text(encoding="UTF-8")
     job = page.partition("#### 🏠 Lint repository metadata (`lint-repo`)")[2]
     job = job.partition("\n#### ")[0]
     assert "print(repo_check_reference())" in job

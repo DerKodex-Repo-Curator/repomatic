@@ -539,7 +539,8 @@ def add_exclude_newer_packages(
     was modified.
 
     :param pyproject_path: Path to the `pyproject.toml` file.
-    :param packages: Package names to add.
+    :param packages: Package names to add, in any PEP 503 spelling. Each entry
+        keeps the spelling it is given.
     :param lock_path: Path to the `uv.lock` file, read to resolve each
         package's locked-version upload time.
     :return: `True` if the file was updated, `False` if no changes were
@@ -553,9 +554,9 @@ def add_exclude_newer_packages(
 
     # Freeze at the locked version; fall back to a permanent span when the
     # package has no PyPI upload time (git or path source).
-    upload_times = parse_lock_upload_times(lock_path)
+    lock = LockFile.load(lock_path)
     entries = {
-        pkg: _freeze_cutoff(upload_times.get(pkg, "")) or "0 day" for pkg in to_add
+        pkg: _freeze_cutoff(lock.upload_time_of(pkg)) or "0 day" for pkg in to_add
     }
     return upsert_exclude_newer_packages(pyproject_path, entries)
 
@@ -580,7 +581,8 @@ def freeze_exclude_newer_packages(
     re-expanding it per locking-machine timezone. Entries already carrying a
     full timestamp are left untouched (idempotent). Packages with no upload
     time in the lock (git or path sources) keep their span: they have no PyPI
-    release to freeze against.
+    release to freeze against. An entry finds its locked release in any PEP 503
+    spelling of its key, and keeps the key as the project wrote it.
 
     :param pyproject_path: Path to the `pyproject.toml` file.
     :param lock_path: Path to the `uv.lock` file.
@@ -594,14 +596,14 @@ def freeze_exclude_newer_packages(
     if not pkg_table:
         return set()
 
-    upload_times = LockFile.load(lock_path).upload_times
+    lock = LockFile.load(lock_path)
     frozen: dict[str, str] = {}
     rewritten: set[str] = set()
     for pkg, value in pkg_table.items():
         text = str(value)
         # Only relative spans track the latest release; fixed cutoffs already hold.
         if _is_relative_span(text):
-            freeze = _freeze_cutoff(upload_times.get(pkg, ""))
+            freeze = _freeze_cutoff(lock.upload_time_of(pkg))
             if freeze is not None:
                 frozen[pkg] = freeze
                 rewritten.add(pkg)
@@ -1216,6 +1218,31 @@ def _cutoff_expiry(value: str, span: timedelta | None, now: datetime) -> str:
     return format_countdown(fixed + span, now)
 
 
+def _entry_forecast(
+    lock: LockFile, pkg: str, value: str, now: datetime
+) -> BypassForecast:
+    """Forecast one `exclude-newer-package` entry against *lock*.
+
+    The expiry comes from the upload time of the held version, or from the
+    entry's own cutoff when the lock does not hold the package: the two
+    conditions {func}`prune_stale_exclude_newer_packages` applies.
+
+    :param lock: The lock the forecast is about.
+    :param pkg: The package the entry names, in any PEP 503 spelling.
+    :param value: The raw `exclude-newer-package` entry value.
+    :param now: Reference instant for the relative hint.
+    :return: The forecast. Its held version is empty for a package the lock
+        does not hold.
+    """
+    span = lock.cooldown_span
+    held_version = lock.version_of(pkg)
+    if held_version:
+        expires = _forecast_expiry(lock.upload_time_of(pkg), span, now)
+    else:
+        expires = _cutoff_expiry(value, span, now)
+    return BypassForecast(pkg, held_version, expires)
+
+
 def compute_bypass_forecasts(
     pyproject_path: Path,
     lock_path: Path,
@@ -1247,19 +1274,12 @@ def compute_bypass_forecasts(
     """
     if lock is None:
         lock = LockFile.load(lock_path)
-    span = lock.cooldown_span
     now = datetime.now(timezone.utc)
-    forecasts = []
-    for pkg, value in sorted(_bypass_entries(pyproject_path).items()):
-        if _is_relative_span(value):
-            continue
-        held_version = lock.version_of(pkg)
-        if held_version:
-            expires = _forecast_expiry(lock.upload_time_of(pkg), span, now)
-        else:
-            expires = _cutoff_expiry(value, span, now)
-        forecasts.append(BypassForecast(pkg, held_version, expires))
-    return forecasts
+    return [
+        _entry_forecast(lock, pkg, value, now)
+        for pkg, value in sorted(_bypass_entries(pyproject_path).items())
+        if not _is_relative_span(value)
+    ]
 
 
 def compute_pruned_forecasts(
@@ -1290,17 +1310,11 @@ def compute_pruned_forecasts(
         return []
     if lock is None:
         lock = LockFile.load(lock_path)
-    span = lock.cooldown_span
     now = datetime.now(timezone.utc)
-    records = []
-    for pkg in sorted(names):
-        held_version = lock.version_of(pkg)
-        if held_version:
-            expires = _forecast_expiry(lock.upload_time_of(pkg), span, now)
-        else:
-            expires = _cutoff_expiry((cutoffs or {}).get(pkg, ""), span, now)
-        records.append(BypassForecast(pkg, held_version, expires))
-    return records
+    return [
+        _entry_forecast(lock, pkg, (cutoffs or {}).get(pkg, ""), now)
+        for pkg in sorted(names)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1379,10 +1393,10 @@ def sync_uv_lock(lock_path: Path) -> SyncResult:
     # Step 1: Prune bypasses whose held version has aged past the cooldown,
     # or whose own cutoff has when the lock holds no version (so uv resolves
     # them normally again), then freeze the survivors at their locked version
-    # so the upgrade below holds them instead of tracking newer releases. Steps 1 and 2 all read the same pre-upgrade
-    # lock through load_lock_data's cache (nothing writes it until Step 3);
-    # `pre` is held for the passes that must keep answering pre-upgrade
-    # questions after Step 3 has moved the file.
+    # so the upgrade below holds them instead of tracking newer releases.
+    # Steps 1 and 2 all read the same pre-upgrade lock through load_lock_data's
+    # cache (nothing writes it until Step 3); `pre` is held for the passes that
+    # must keep answering pre-upgrade questions after Step 3 has moved the file.
     pre = LockFile.load(lock_path)
     pyproject_path = lock_path.parent / "pyproject.toml"
     pruned: set[str] = set()

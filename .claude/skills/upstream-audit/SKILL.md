@@ -160,7 +160,7 @@ Wrap an item whose title quotes a misspelling in `<!-- typos:off -->` and `<!-- 
 Use the `{octicon}` title format if sphinx-design is available (check `docs/conf.py` for the extension):
 
 ```markdown
-# {octicon}`git-pull-request` Upstream
+# {octicon}`cross-reference` Upstream
 ```
 
 ### Auditing an existing page (`audit`)

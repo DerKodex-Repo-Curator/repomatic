@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import inspect
 import re
 from importlib.resources import files
 from pathlib import Path
@@ -726,6 +727,41 @@ def test_template_config_options_are_real_keys(name: str) -> None:
 
     keys = [key for key, _ in options]
     assert keys == sorted(keys), f"{name} config options are not sorted: {keys}"
+
+
+SWITCH_KEY_RE = re.compile(r'exit_if_disabled\(.*?"(?P<key>[\w.-]+)",?\s*\)', re.DOTALL)
+"""The `[tool.repomatic]` key a command hands to `exit_if_disabled`."""
+
+
+def test_templates_list_the_switch_of_their_command() -> None:
+    """A pull request body that lists options names the one that stops it.
+
+    A command gated by `exit_if_disabled` opens no pull request once its switch
+    is off, so the option list of that pull request is where a maintainer looks
+    for the switch. Only a template named after its command is read: `audit`
+    and `sync-binaries` fill a template of another name. A template with no
+    option list is left alone, like the `setup-guide` issue body.
+    """
+    templates = set(get_template_names())
+    checked = 0
+    missing = []
+    for name, command in sorted(repomatic.commands.items()):
+        if name not in templates or command.callback is None:
+            continue
+        switch = SWITCH_KEY_RE.search(inspect.getsource(command.callback))
+        _, body = load_template(name)
+        listed = {match["key"] for match in CONFIG_OPTION_BULLET.finditer(body)}
+        if not switch or not listed:
+            continue
+        checked += 1
+        if switch["key"] not in listed:
+            missing.append(f"{name}: {switch['key']}")
+    # An empty population would make the loop above prove nothing.
+    assert checked
+    assert not missing, (
+        "These templates list the options of their command without the one that"
+        f" turns it off: {missing}"
+    )
 
 
 FAKE_FOOTER = (

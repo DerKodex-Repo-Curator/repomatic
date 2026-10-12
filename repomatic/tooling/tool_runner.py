@@ -89,7 +89,7 @@ else:
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Generator, Iterator, Sequence
     from typing import IO, Any
 
 
@@ -237,7 +237,7 @@ def _release_lock(handle: IO[bytes]) -> None:
 
 
 @contextmanager
-def _cwd_config_lock(spec: ToolSpec) -> Iterator[None]:
+def _cwd_config_lock(spec: ToolSpec) -> Generator[None, None, None]:
     """Hold off other runs that would write the same working-directory config.
 
     A tool with no `--config` flag gets its config through
@@ -938,8 +938,9 @@ def _venv_install_args(spec: ToolSpec, venv: str) -> list[str]:
     """Build the command that installs the pinned tool into *venv*.
 
     The command carries no cooldown flag of its own. Like the `uv run --frozen
-    --with` form it replaces, it takes the window and its exemptions from the
-    project's `[tool.uv]` section and from `UV_EXCLUDE_NEWER`.
+    --with` form of the other `needs_venv` tools, it takes the window and its
+    exemptions from the project's `[tool.uv]` section and from
+    `UV_EXCLUDE_NEWER`.
     """
     package_pin = f"{spec.package or spec.name}=={spec.version}"
     return [*uv_cmd("pip"), "install", "--python", venv, package_pin]

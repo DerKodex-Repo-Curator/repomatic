@@ -770,9 +770,9 @@ jobs:
 
   # The graph shows no package versions, so a lock refresh changes it only when
   # the dependency tree changes shape or a declared version requirement changes.
-  # Gated on any Python project: a uv virtual project locks dependencies too,
-  # but never runs the release engine. `dependency-graph.update = false` makes
-  # the command exit without writing.
+  # Gated on any Python project, packaged or not: a uv virtual project locks
+  # dependencies too. `dependency-graph.update = false` makes the command exit
+  # without writing.
   update-dep-graph:
     name: 🕸️ Update dependency graph
     needs:

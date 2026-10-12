@@ -36,6 +36,7 @@ from repomatic.cli.main import repomatic
 from repomatic.config import Config
 from repomatic.deps.dep_report import BYPASS_NEEDS_RELEASE, BypassForecast
 from repomatic.deps.uv import (
+    add_exclude_newer_packages,
     bypass_comment_mentions,
     compute_bypass_forecasts,
     compute_pruned_forecasts,
@@ -509,6 +510,46 @@ def test_freeze_exclude_newer_packages_window_absorbs_same_day_patch(tmp_path):
     assert datetime(2026, 7, 27, 20, 15, tzinfo=timezone.utc) < cutoff
     assert datetime(2026, 7, 28, 23, 0, tzinfo=timezone.utc) < cutoff
     assert datetime(2026, 7, 29, 9, 0, tzinfo=timezone.utc) >= cutoff
+
+
+LOCK_NAME_SPELLINGS = ("lemon-curd", "lemon_curd", "Lemon_Curd", "LEMON-CURD")
+"""Spellings of one package name under PEP 503. The first is the one uv locks."""
+
+
+@pytest.mark.parametrize("key", LOCK_NAME_SPELLINGS)
+def test_freeze_matches_a_lock_name_in_any_spelling(tmp_path, key):
+    """A span keyed by another spelling of the name is frozen like any other.
+
+    A lookup by the raw key finds no upload time, reads the package as a git or
+    path source, and leaves the span to track the latest release for good. The
+    entry keeps the key the project wrote.
+    """
+    pyproject = _write_uv_config(
+        tmp_path,
+        f'exclude-newer = "1 week"\nexclude-newer-package = {{ {key} = "0 day" }}\n',
+    )
+    lock = _write_lock(tmp_path, ("lemon-curd", "2.0.0", "2026-07-01T12:00:00Z"))
+    assert freeze_exclude_newer_packages(pyproject, lock) == {key}
+    assert (
+        f'exclude-newer-package = {{ {key} = "2026-07-03T00:00:00Z" }}'
+        in pyproject.read_text(encoding="UTF-8")
+    )
+
+
+@pytest.mark.parametrize("name", LOCK_NAME_SPELLINGS)
+def test_add_matches_a_lock_name_in_any_spelling(tmp_path, name):
+    """A package added under another spelling of its name gets a freeze cutoff.
+
+    A lookup by the raw name finds no upload time, and the entry falls back to
+    the permanent `"0 day"` span of a git or path source.
+    """
+    pyproject = _write_uv_config(tmp_path, 'exclude-newer = "1 week"\n')
+    lock = _write_lock(tmp_path, ("lemon-curd", "2.0.0", "2026-07-01T12:00:00Z"))
+    assert add_exclude_newer_packages(pyproject, {name}, lock) is True
+    assert (
+        f'exclude-newer-package = {{ {name} = "2026-07-03T00:00:00Z" }}'
+        in pyproject.read_text(encoding="UTF-8")
+    )
 
 
 def test_compute_bypass_forecasts_reports_freezes_only(tmp_path):

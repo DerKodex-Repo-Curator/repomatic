@@ -15,3 +15,4 @@ Relevant [`[tool.repomatic]`](https://repomatic.net/configuration) options:
 - [`dependency-graph.no-extras`](https://repomatic.net/configuration#dependency-graph-no-extras)
 - [`dependency-graph.no-groups`](https://repomatic.net/configuration#dependency-graph-no-groups)
 - [`dependency-graph.output`](https://repomatic.net/configuration#dependency-graph-output)
+- [`dependency-graph.update`](https://repomatic.net/configuration#dependency-graph-update)

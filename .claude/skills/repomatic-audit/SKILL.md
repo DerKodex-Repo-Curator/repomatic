@@ -64,7 +64,7 @@ Before you compare a managed file by hand, run the adopted release's generator o
 
 ```shell-session
 $ git worktree add --detach {scratch}/audit HEAD
-$ uvx --no-progress --exclude-newer-package repomatic=P0D --directory {scratch}/audit 'repomatic==X.Y.Z' init
+$ uvx --no-progress --exclude-newer '1 week' --exclude-newer-package repomatic=P0D --directory {scratch}/audit 'repomatic==X.Y.Z' init
 $ git -C {scratch}/audit diff
 $ git worktree remove --force {scratch}/audit
 ```

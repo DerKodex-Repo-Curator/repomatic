@@ -54,12 +54,13 @@ Jobs that use `REPOMATIC_PAT`:
 
 - `autofix.yaml`: fix-typos, sync-repomatic, sync-action-pins,
   sync-workflow-pins, sync-runner-images (PRs touching
-  `.github/workflows/` files),
-  sync-tool-versions (upstream-only dependency PRs), fix-vulnerable-deps
-  (reads the GitHub Advisory Database).
+  `.github/workflows/` files), fix-vulnerable-deps (reads the GitHub
+  Advisory Database).
 - `changelog.yaml`: prepare-release (freezes versions in workflow files).
 - `release.yaml`: create-tag (push triggers `on.push.tags`),
   create-release (triggers downstream workflows).
+- `self-maintenance.yaml`: sync-tool-versions (upstream-only dependency
+  PRs).
 
 All jobs fall back to `GITHUB_TOKEN` when the PAT is unavailable
 (`secrets.REPOMATIC_PAT || github.token`), but

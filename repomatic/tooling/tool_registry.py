@@ -748,8 +748,10 @@ class ToolSpec:
     post_process: Callable[[Sequence[str]], None] | None = None
     """Callback invoked on `extra_args` after the tool exits successfully.
 
-    `run_tool` adds each file the run rewrote below a directory argument, so a
-    callback that reads its arguments as files covers a tree too.
+    `run_tool` adds each file whose content changed below a directory argument
+    during the run, so a callback that reads its arguments as files covers a
+    tree too. A callback must skip a file it cannot read: another process can
+    be the one that changed it.
 
     Intended for temporary workarounds that fix known upstream formatting bugs
     in-place. Each callback carries its own todo admonition naming the upstream
@@ -981,13 +983,18 @@ def _fix_myst_directives(extra_args: Sequence[str]) -> None:
     directive options are restored to field-list syntax (see
     {data}`_DIRECTIVE_YAML_OPTIONS_RE`), and escaped colon-fence directives are
     un-escaped (see {data}`_ESCAPED_COLON_FENCE_RE`). Files without matching
-    patterns are left untouched.
+    patterns are left untouched, and so is a file that is not UTF-8 text.
     """
     for arg in extra_args:
         path = Path(arg)
         if not path.is_file():
             continue
-        content = path.read_text(encoding="UTF-8")
+        try:
+            content = path.read_text(encoding="UTF-8")
+        except UnicodeDecodeError:
+            # mdformat writes UTF-8, so this file is not one of its own. The
+            # runner also hands over whatever else changed below a directory.
+            continue
         fixed = _DIRECTIVE_YAML_OPTIONS_RE.sub(_yaml_block_to_field_list, content)
         fixed = _ESCAPED_COLON_FENCE_RE.sub(_unescape_colon_fence, fixed)
         if fixed != content:

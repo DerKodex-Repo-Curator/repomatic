@@ -153,9 +153,9 @@ Matches the `warning:` lines the configuration loader logs, like an unknown
 PYPROJECT_FMT_INDENT = 2
 """Spaces `pyproject-fmt` puts before each row of a multi-line array, its default.
 
-{func}`_graft_local_additions` lays out a rebuilt multi-line array at this
-indent. tomlrt's own fallback is four spaces, which the `format-pyproject` job
-rewrites in a pull request of its own.
+`_graft_local_additions` lays out a rebuilt multi-line array at this indent.
+tomlrt's own fallback is four spaces, which the `format-pyproject` job rewrites
+in a pull request of its own.
 """
 
 RUNTIME_FRAGMENTS: tuple[str, ...] = (

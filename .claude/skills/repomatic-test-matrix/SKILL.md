@@ -50,9 +50,26 @@ State the sample size and both counts when proposing the change, and record in t
 
 ### Pin the dependency floor, and any release a workaround targets
 
-Add the floor of a supported range as an explicit matrix value: the floor is what an install actually resolves for someone on an old environment, and nothing else in CI exercises it.
+Add the floor of a supported range as an explicit matrix value: the floor is what an install actually resolves for someone on an old environment, and no other cell runs it, unless the matrix holds the `lowest-direct` cell below.
 
 Add any mid-range release a shim works around, too. That version is the one that catches the shim regressing, and it is invisible to a matrix that only spans the endpoints.
+
+### Run every declared floor in one cell
+
+One pinned value verifies one dependency. To run every declared floor at once, add one `full-include` row that carries a `resolution` key, on the floor Python of the fastest runner:
+
+```toml
+[tool.repomatic]
+test-matrix.full-include = [
+  { "os" = "ubuntu-26.04-arm", "python-version" = "3.10", "resolution" = "lowest-direct" },
+]
+```
+
+The `tests` job of the bundled `tests.yaml` resolves the project again in a cell that carries that key: each direct dependency takes the lowest version its specifier allows. The cell fails when the code calls an API newer than a declared floor.
+
+A `tests.yaml` whose jobs predate that step ignores the key, and the cell then repeats its twin. Copy the step that reads `matrix.resolution` from the upstream workflow first, at the tag the repository pins: `gh api 'repos/kdeldycke/repomatic/contents/.github/workflows/tests.yaml?ref=vX.Y.Z' -H 'Accept: application/vnd.github.raw'`.
+
+The cell cannot see a dependency that another requirement holds above its floor, or a library that the tests replace with a mock. Check those two by hand: the `/repomatic-deps` skill, when present, holds the procedure.
 
 ### Select runners by measured speed and workload, not architecture
 
