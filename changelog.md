@@ -34,6 +34,7 @@
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
 - The bundled `repomatic-deps` skill now checks for a dependency floor set too low, and says how to relock after a floor change.
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
+- The bundled `file-bug-report` skill now says not to offer a comment on an issue that a maintainer already answered as in progress.
 
 ## [`7.17.1` (2026-09-30)](https://github.com/kdeldycke/repomatic/compare/v7.17.0...v7.17.1)
 

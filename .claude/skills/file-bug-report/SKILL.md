@@ -155,7 +155,7 @@ $ gh issue list --repo <owner/repo> --state all --json title,url,state
 
 Search with multiple keyword variations (error messages, function names, symptoms). Check both open and closed issues: the bug may have been reported and closed as "won't fix", or fixed in a version the user hasn't upgraded to.
 
-If a matching open issue exists, report it to the user and stop. If a matching closed issue exists, mention it in the report with a link and explain why this is a new occurrence (different version, different context, regression).
+If a matching open issue exists, report it to the user and stop. Do not offer a comment on an issue that a maintainer has already answered as in progress, unless the user asks for one. If a matching closed issue exists, mention it in the report with a link and explain why this is a new occurrence (different version, different context, regression).
 
 A matching issue closed for lack of a reproducer is not a dead end: cite it, because that closure is part of the record, and supply what it lacked.
 
