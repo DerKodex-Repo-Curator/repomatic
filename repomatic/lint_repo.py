@@ -52,7 +52,7 @@ from .github.actions import NULL_SHA, AnnotationLevel, emit_annotation
 from .github.gh import gh_api_json, gh_graphql, run_gh_command
 from .github.matrix import PYTHON_VERSION_AXIS
 from .github.pr_body import footer_opted_out
-from .github.token import check_all_pat_permissions
+from .github.token import PAT_PERMISSION_PROBES, check_all_pat_permissions
 from .http import FetchError
 from .humanize import format_file_size
 from .labels import LabelConfigError, declared_label_names
@@ -152,6 +152,34 @@ MAX_REPORTED_DEAD_URLS = 5
 Enough to recognize which part of the file fell off the end, short of dumping
 a tail that can run to hundreds of rules into one lint message. The remainder
 is counted rather than listed, and the fix is the same reorder either way.
+"""
+
+PAT_SCOPE_PROBE = next(
+    probe for probe in PAT_PERMISSION_PROBES if probe.field == "administration"
+)
+"""The permission probe {func}`check_pat_repository_scope` sends to other repositories.
+
+The endpoint that reports a token's own repository selection,
+`GET /installation/repositories`, refuses a personal access token. So the check
+reads what the token is allowed to do. A token gets a 2xx from this endpoint
+only for a repository it covers with `Administration: Read-only`. An answer
+from another repository then proves the token covers it.
+
+No other row of {data}`~repomatic.github.token.PAT_PERMISSION_PROBES` can do
+that. A public repository answers the contents, issues, pull requests and
+workflows endpoints to any caller. The Dependabot alerts endpoint answers `404`
+wherever alerts are off, which says nothing about the token. Read on 2026-10-13:
+this endpoint answers `401` to a caller with no token, and `403` to an account
+that does not administer the repository.
+"""
+
+PAT_SCOPE_PROBE_LIMIT = 10
+"""How many other repositories {func}`check_pat_repository_scope` probes.
+
+Each probe is one API call, made on every `lint-repo` and `setup-guide` run. The
+check takes the owner's most recently pushed repositories: a token shared
+between repositories serves the active ones, and a token with access to all of
+them gets an answer from the first one probed.
 """
 
 PR_TEMPLATE_DIR = Path(".github/pr-templates")
@@ -734,19 +762,36 @@ def check_topics_subset_of_keywords(
 
 
 def check_pat_repository_scope(repo: str) -> CheckResult:
-    """Check that the PAT is scoped to only the current repository.
+    """Check that the PAT has no access to another repository of the same owner.
 
-    Fine-grained PATs should use **Only select repositories** to follow
-    the principle of least privilege. This check detects tokens configured
-    with **All repositories** access.
+    A fine-grained PAT should name this repository alone under **Only select
+    repositories**, to follow the principle of least privilege. This check
+    detects a token that also covers another repository, through **All
+    repositories** access or through a longer selection.
 
     Two strategies are tried in order:
 
     1. `GET /installation/repositories` — returns the repos the token
-       can access, including a `repository_selection` field.
-    2. Cross-repo probe — check `permissions.push` on another repo
-       owned by the same user. If the token can push to a repo it should
-       not have access to, it is over-scoped.
+       can access, including a `repository_selection` field. GitHub answers it
+       to an installation token and refuses a personal one.
+    2. Cross-repo probe — send {data}`PAT_SCOPE_PROBE` to the owner's
+       {data}`PAT_SCOPE_PROBE_LIMIT` most recently pushed other repositories.
+       The first one that answers fails the check.
+
+    Each probe splits three ways:
+
+    - **2xx**: the token covers that repository too. Fail, and name it.
+    - **HTTP 403**: the token is refused there. The check passes once a probe
+      was refused and none answered.
+    - **Anything else** (404, 5xx, network): indeterminate for that repository.
+
+    ```{note}
+    Only a 2xx fails the check, so it never reports a token limited to this
+    repository. A pass is narrower than it reads: it covers the probed
+    repositories, and `/users/{owner}/repos` lists the public ones only. A
+    token is also refused wherever its account has no admin role, whatever the
+    token covers.
+    ```
 
     :param repo: Repository in 'owner/repo' format.
     :return: A `CheckResult`.
@@ -775,11 +820,23 @@ def check_pat_repository_scope(repo: str) -> CheckResult:
             True, "PAT scope: correctly limited to selected repositories."
         )
 
-    # Strategy B: cross-repo probe.
+    # Strategy B: cross-repo probe. A refusal from another repository means
+    # something only when this repository answers the same request.
+    endpoint = PAT_SCOPE_PROBE.endpoint
+    try:
+        run_gh_command(["api", endpoint.format(repo=repo), "--silent"])
+    except RuntimeError:
+        return CheckResult(
+            None,
+            "PAT scope check: skipped"
+            f" (no {PAT_SCOPE_PROBE.permission!r} access to probe with).",
+        )
+
     owner = repo.split("/", 1)[0]
     try:
         # `gh api` sends a POST once a field is passed, which this endpoint
-        # answers with a 404.
+        # answers with a 404. One more than the limit, so that leaving this
+        # repository out of the page still fills the quota.
         output = run_gh_command([
             "api",
             "--method",
@@ -788,41 +845,48 @@ def check_pat_repository_scope(repo: str) -> CheckResult:
             "--jq",
             ".[].full_name",
             "--raw-field",
-            "per_page=10",
+            f"per_page={PAT_SCOPE_PROBE_LIMIT + 1}",
             "--raw-field",
             "type=owner",
+            "--raw-field",
+            "sort=pushed",
         ])
     except RuntimeError:
         return CheckResult(
             None, "PAT scope check: skipped (could not list owner repos)."
         )
 
+    # GitHub matches a repository name whatever its case, and `--repo` takes
+    # the name as typed: an exact comparison would probe this repository as
+    # if it were another one.
     other_repos = [
-        r.strip() for r in output.splitlines() if r.strip() and r.strip() != repo
-    ]
+        name
+        for name in map(str.strip, output.splitlines())
+        if name and name.casefold() != repo.casefold()
+    ][:PAT_SCOPE_PROBE_LIMIT]
     if not other_repos:
         return CheckResult(None, "PAT scope check: skipped (no other repos to probe).")
 
-    probe_repo = other_repos[0]
-    try:
-        output = run_gh_command([
-            "api",
-            f"repos/{probe_repo}",
-            "--jq",
-            ".permissions.push",
-        ])
-        if output.strip() == "true":
-            msg = (
-                f"PAT has push access to {probe_repo}."
-                " Token is likely scoped to 'All repositories'"
-                " instead of 'Only select repositories'."
-            )
-            return CheckResult(False, msg)
-    except RuntimeError:
-        return CheckResult(None, "PAT scope check: skipped (probe request failed).")
+    refused = 0
+    for other in other_repos:
+        try:
+            run_gh_command(["api", endpoint.format(repo=other), "--silent"])
+        except RuntimeError as exc:
+            if "HTTP 403" in str(exc):
+                refused += 1
+            continue
+        msg = (
+            f"PAT also has access to {other}."
+            " Limit it to this repository under 'Only select repositories'."
+        )
+        return CheckResult(False, msg)
 
+    if not refused:
+        return CheckResult(
+            None, "PAT scope check: skipped (no probe got a clear answer)."
+        )
     return CheckResult(
-        True, f"PAT scope: no push access to {probe_repo} (correctly scoped)."
+        True, f"PAT scope: no access to other repositories ({refused} probed)."
     )
 
 
@@ -4466,10 +4530,11 @@ REPO_CHECKS: tuple[RepoCheck, ...] = (
         lambda ctx: check_pat_repository_scope(ctx.repo or ""),
         summary="With a PAT, a REPOMATIC_PAT limited to this repository",
         description=(
-            "Warns when a configured `REPOMATIC_PAT` has access to all repositories"
-            " instead of only the current one. The check reads the token's repository"
-            " selection, and falls back to probing push access on another repository"
-            " of the same owner"
+            "Warns when a configured `REPOMATIC_PAT` also has access to another"
+            " repository of the same owner. The check asks the owner's most"
+            " recently pushed repositories for their Actions settings, which only a"
+            " token covering them can read. The setup guide issue stays open on the"
+            " same finding"
         ),
         applies=lambda ctx: bool(ctx.has_pat and ctx.repo),
     ),

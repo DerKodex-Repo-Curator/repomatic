@@ -1,7 +1,9 @@
 ---
-args: [repo_url, repo_name, repo_owner, repo_slug]
+args: [repo_url, repo_name, repo_owner, repo_slug, scope_warning]
 footer: 'false'
 ---
+
+\$scope_warning
 
 Some jobs create PRs touching `.github/workflows/`, which needs a **fine-grained personal access token**. Without it they fail silently.
 

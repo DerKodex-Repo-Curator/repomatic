@@ -66,6 +66,7 @@ MISSING_ALERTS_PAT = pat_results(
 def _offline_setup_guide(
     *,
     pat: PatPermissionResults | None = None,
+    scope_ok: CheckResult | None = None,
     branch_ok: CheckResult | None = None,
     immutable_ok: CheckResult | None = None,
     fork_pr_ok: CheckResult | None = None,
@@ -84,6 +85,7 @@ def _offline_setup_guide(
 
     :param pat: Result of the PAT permission probe (defaults to all checks
         passing).
+    :param scope_ok: Return of the PAT repository-scope check.
     :param branch_ok: Return of the branch-ruleset check.
     :param immutable_ok: Return of the immutable-releases check.
     :param fork_pr_ok: Return of the fork-PR approval-policy check.
@@ -94,6 +96,10 @@ def _offline_setup_guide(
     """
     if pat is None:
         pat = pat_results()
+    if scope_ok is None:
+        scope_ok = CheckResult(
+            True, "PAT scope: no access to other repositories (3 probed)."
+        )
     if branch_ok is None:
         branch_ok = CheckResult(True, "Active branch rulesets found: main.")
     if immutable_ok is None:
@@ -114,6 +120,12 @@ def _offline_setup_guide(
             patch(
                 "repomatic.github.token.check_all_pat_permissions",
                 return_value=pat,
+            )
+        )
+        enter(
+            patch(
+                "repomatic.setup_guide.check_pat_repository_scope",
+                return_value=scope_ok,
             )
         )
         enter(
@@ -457,6 +469,60 @@ def test_setup_guide_missing_administration_is_reported():
     content = bodies[0]
     assert "missing some permissions" in content
     assert "Administration: Read-only" in content
+
+
+OVERSCOPED = CheckResult(
+    False,
+    "PAT also has access to orchard/cherry."
+    " Limit it to this repository under 'Only select repositories'.",
+)
+"""What the scope probe answers for a PAT that covers another repository."""
+
+
+@pytest.mark.parametrize(
+    ("scope_ok", "expected_has_issues"),
+    (
+        pytest.param(OVERSCOPED, True, id="another-repository-answers"),
+        pytest.param(None, False, id="every-probe-refused"),
+        pytest.param(
+            CheckResult(None, "PAT scope check: skipped (no other repos to probe)."),
+            False,
+            id="undecided",
+        ),
+    ),
+)
+def test_setup_guide_holds_open_on_a_pat_that_covers_another_repository(
+    scope_ok, expected_has_issues
+):
+    """A PAT that covers another repository reopens the token step, and says why.
+
+    The step asks for this repository and nothing else, and nothing read that
+    answer back: the probe ran in `lint-repo` alone, as a warning. An undecided
+    probe closes the issue like a pass does, since the reader cannot act on it.
+    `None` keeps the passing default of the seam.
+    """
+    with _offline_setup_guide(scope_ok=scope_ok) as (lifecycle, bodies):
+        _invoke(
+            ["setup-guide", "--has-pat", "--repo", REPO_SLUG, "--has-virustotal-key"],
+            env=FULLY_CONFIGURED,
+        )
+    assert lifecycle.call_args_list[0][1]["has_issues"] is expected_has_issues
+    content = bodies[0]
+    reopened = "<details open>\n<summary>❌ <strong>Create and configure the token"
+    assert (reopened in content) is expected_has_issues
+    warned = f"> ⚠️ **Warning**: {OVERSCOPED.message}" in content
+    assert warned is expected_has_issues
+
+
+def test_setup_guide_scope_probe_needs_a_pat():
+    """Without a PAT there is no token to probe, and the step says nothing of scope."""
+    with (
+        _offline_setup_guide() as (_lifecycle, bodies),
+        patch("repomatic.setup_guide.check_pat_repository_scope") as probe,
+    ):
+        _invoke(["setup-guide", "--repo", REPO_SLUG])
+    probe.assert_not_called()
+    assert "⚠️ **Warning**: PAT" not in bodies[0]
 
 
 PACKAGE_PYPROJECT = """\

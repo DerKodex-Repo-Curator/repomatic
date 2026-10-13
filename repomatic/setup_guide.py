@@ -45,6 +45,7 @@ from .lint_repo import (
     check_fork_pr_approval_policy,
     check_immutable_releases,
     check_pages_deployment_source,
+    check_pat_repository_scope,
     check_pypi_trusted_publisher,
     check_sha_pinning_required,
 )
@@ -191,10 +192,38 @@ class GuideContext:
             f"{table}\n"
         )
 
+    @cached_property
+    def pat_scope(self) -> CheckResult | None:
+        """The PAT repository-scope probe result, or `None` when unrunnable."""
+        if not (self.has_pat and self.repo):
+            return None
+        return check_pat_repository_scope(self.repo)
+
+    @property
+    def scope_warning(self) -> str:
+        """Warning naming another repository the configured PAT covers.
+
+        Empty unless the probe failed. A probe that could not conclude answers
+        `None`, and the reader has nothing to act on then: the token step stays
+        closed, as it does for a pass.
+        """
+        scope = self.pat_scope
+        if scope is None or scope.passed is not False:
+            return ""
+        return f"> ⚠️ **Warning**: {scope.message}"
+
     @property
     def token_ok(self) -> bool:
-        """Whether a PAT is configured and every permission probe passed."""
-        return self.has_pat and not self.missing_permissions_section
+        """Whether a PAT is configured, permitted and limited to this repository.
+
+        The token step asks for this repository and nothing else, so a token
+        that the scope probe finds on another repository has not done that step.
+        """
+        return (
+            self.has_pat
+            and not self.missing_permissions_section
+            and not self.scope_warning
+        )
 
     @property
     def cloudflare_secrets_ok(self) -> bool:
@@ -384,6 +413,7 @@ SETUP_STEPS: tuple[SetupStep, ...] = (
             "repo_name": ctx.md.repo_name,
             "repo_owner": ctx.md.repo_owner,
             "repo_slug": ctx.md.repo_slug,
+            "scope_warning": ctx.scope_warning,
         },
     ),
     SetupStep(

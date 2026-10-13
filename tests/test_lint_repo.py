@@ -48,6 +48,8 @@ from repomatic.labels import (
     serialize_inline_labels,
 )
 from repomatic.lint_repo import (
+    PAT_SCOPE_PROBE,
+    PAT_SCOPE_PROBE_LIMIT,
     REPO_CHECKS,
     CheckResult,
     LintContext,
@@ -2262,7 +2264,11 @@ def test_pat_check_annotates_with_github_status_incident():
         assert "githubstatus.com" in msg
 
 
-def _gh_api_stand_in(args: list[str], push: str) -> str:
+REFUSED = "Resource not accessible by personal access token (HTTP 403)"
+"""What `gh` reports when a token asks a repository it does not cover."""
+
+
+def _gh_api_stand_in(args: list[str], answers: Mapping[str, str | None]) -> str:
     """Answer the scope check's `gh api` calls, method switch included.
 
     `gh api` sends a `POST` as soon as a field is passed, unless `--method` says
@@ -2271,11 +2277,13 @@ def _gh_api_stand_in(args: list[str], push: str) -> str:
     a `GET`.
 
     :param args: Arguments the check hands to `gh`.
-    :param push: What the probed repository reports as `permissions.push`.
+    :param answers: The owner's repositories, in the order the listing returns
+        them. Each maps to the `gh` error its Actions settings raise, or to
+        `None` where the token reads them.
     :return: The output `gh` would print.
     """
     if "/installation/repositories" in args:
-        raise RuntimeError("Resource not accessible by personal access token")
+        raise RuntimeError(REFUSED)
     if "/users/orchard/repos" in args:
         if "--method" in args:
             sends_get = args[args.index("--method") + 1] == "GET"
@@ -2283,24 +2291,140 @@ def _gh_api_stand_in(args: list[str], push: str) -> str:
             sends_get = not {"--raw-field", "--field"} & set(args)
         if not sends_get:
             raise RuntimeError("Not Found (HTTP 404)")
-        return "orchard/apricot\norchard/cherry\n"
-    return push
+        return "".join(f"{name}\n" for name in answers)
+    # GitHub resolves a repository name whatever its case.
+    settings = {
+        PAT_SCOPE_PROBE.endpoint.format(repo=name).casefold(): error
+        for name, error in answers.items()
+    }
+    if error := settings[args[1].casefold()]:
+        raise RuntimeError(error)
+    return ""
+
+
+def test_pat_repository_scope_probes_an_endpoint_only_its_token_reads():
+    """The probe is the Administration row, and no other row can replace it.
+
+    A public repository answers the contents, issues, pull requests and
+    workflows endpoints to any caller, so a 2xx from one of them on another
+    repository says nothing about the token.
+    """
+    assert PAT_SCOPE_PROBE.field == "administration"
+    assert PAT_SCOPE_PROBE in PAT_PERMISSION_PROBES
 
 
 @pytest.mark.parametrize(
-    ("push", "passed", "fragment"),
+    ("answers", "passed", "fragment"),
     (
-        ("false", True, "no push access to orchard/cherry"),
-        ("true", False, "PAT has push access to orchard/cherry"),
+        pytest.param(
+            {"orchard/apricot": None, "orchard/cherry": None},
+            False,
+            "PAT also has access to orchard/cherry",
+            id="another-repository-answers",
+        ),
+        pytest.param(
+            {"orchard/apricot": None, "orchard/cherry": REFUSED, "orchard/plum": None},
+            False,
+            "PAT also has access to orchard/plum",
+            id="a-later-repository-answers",
+        ),
+        pytest.param(
+            {
+                "orchard/apricot": None,
+                "orchard/cherry": REFUSED,
+                "orchard/plum": REFUSED,
+            },
+            True,
+            "no access to other repositories (2 probed)",
+            id="every-probe-refused",
+        ),
+        pytest.param(
+            {
+                "orchard/apricot": None,
+                "orchard/cherry": "Bad Gateway (HTTP 502)",
+                "orchard/plum": REFUSED,
+            },
+            True,
+            "no access to other repositories (1 probed)",
+            id="one-refusal-beside-an-unclear-answer",
+        ),
+        pytest.param(
+            {
+                "orchard/apricot": None,
+                "orchard/cherry": "Not Found (HTTP 404)",
+                "orchard/plum": "Bad Gateway (HTTP 502)",
+            },
+            None,
+            "no probe got a clear answer",
+            id="no-clear-answer",
+        ),
+        pytest.param(
+            {"orchard/apricot": REFUSED, "orchard/cherry": None},
+            None,
+            "no 'Administration: Read-only' access to probe with",
+            id="token-cannot-probe",
+        ),
+        pytest.param(
+            {"orchard/apricot": None},
+            None,
+            "no other repos to probe",
+            id="no-other-repository",
+        ),
+        pytest.param(
+            {"Orchard/Apricot": None},
+            None,
+            "no other repos to probe",
+            id="own-name-in-another-case",
+        ),
     ),
 )
-def test_pat_repository_scope_probes_another_repository(push, passed, fragment):
-    """A PAT is refused the installation endpoint, so the probe decides."""
+def test_pat_repository_scope_probes_other_repositories(answers, passed, fragment):
+    """A PAT is refused the installation endpoint, so the probes decide.
+
+    Only a repository that answers fails the check: a refusal passes it, and
+    anything else leaves it undecided. The repository under check is never one
+    of the others, however the listing spells its name.
+    """
     with patch("repomatic.lint_repo.run_gh_command") as mock_gh:
-        mock_gh.side_effect = lambda args: _gh_api_stand_in(args, push)
+        mock_gh.side_effect = lambda args: _gh_api_stand_in(args, answers)
         result = check_pat_repository_scope("orchard/apricot")
     assert result.passed is passed
     assert fragment in result.message
+
+
+def test_pat_repository_scope_probes_the_most_recently_pushed_repositories():
+    """The listing is sorted by push date, and the probes stop at the limit."""
+    answers: dict[str, str | None] = {"orchard/apricot": None}
+    answers.update({
+        f"orchard/tree-{index}": REFUSED for index in range(PAT_SCOPE_PROBE_LIMIT + 5)
+    })
+    with patch("repomatic.lint_repo.run_gh_command") as mock_gh:
+        mock_gh.side_effect = lambda args: _gh_api_stand_in(args, answers)
+        result = check_pat_repository_scope("orchard/apricot")
+    assert result.passed is True
+    assert f"({PAT_SCOPE_PROBE_LIMIT} probed)" in result.message
+    calls = [call.args[0] for call in mock_gh.call_args_list]
+    listing = next(args for args in calls if "/users/orchard/repos" in args)
+    assert "sort=pushed" in listing
+    # One page holds this repository and a full quota of others.
+    assert f"per_page={PAT_SCOPE_PROBE_LIMIT + 1}" in listing
+    probed = [args[1] for args in calls if args[1].startswith("repos/")]
+    # This repository first, then the others.
+    assert len(probed) == 1 + PAT_SCOPE_PROBE_LIMIT
+
+
+def test_pat_repository_scope_skips_an_unreadable_listing():
+    """A listing that fails leaves the check undecided."""
+
+    def gh(args: list[str]) -> str:
+        if "/users/orchard/repos" in args or "/installation/repositories" in args:
+            raise RuntimeError("Bad Gateway (HTTP 502)")
+        return ""
+
+    with patch("repomatic.lint_repo.run_gh_command", side_effect=gh):
+        result = check_pat_repository_scope("orchard/apricot")
+    assert result.passed is None
+    assert "could not list owner repos" in result.message
 
 
 def test_pat_stale_statuses_permission_present():

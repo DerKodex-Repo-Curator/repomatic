@@ -78,6 +78,7 @@ This workflow runs on every push to `main` and on a **weekly schedule** so quiet
 - Detects missing `REPOMATIC_PAT` secret and opens an issue with step-by-step setup instructions
 - When the PAT is present, validates all required permissions (administration, contents, issues, pull requests, Dependabot alerts, workflows) using the same checks as `lint-repo`
 - Keeps the issue open with a diagnostic table when the PAT exists but permissions are incomplete
+- Keeps the issue open while the PAT also has access to another repository of the same owner, and names that repository in the token step, using the same check as `lint-repo`
 - For projects published to PyPI, probes the latest release's PEP 740 provenance and keeps the issue open until a successful OIDC-attested upload confirms the [Trusted Publisher entry](https://docs.pypi.org/trusted-publishers/adding-a-publisher/) is registered for this repo's own `release.yaml`
 - Includes the setup step of whichever host `site.deploy` names, and only that one: the GitHub Pages deployment source (Sphinx projects, the only ones repomatic publishes there), or the Cloudflare Pages project and its deploy token (any repository declaring the target, since a site built by its own workflow needs the same secret). A site that also declares `site.cloudflare-r2-bucket` gets one more step, for the R2 bucket and its upload key pair, and the issue stays open until both keys are set
 - When Nuitka binary compilation is active, includes a VirusTotal API key setup step and keeps the issue open until the key is configured
