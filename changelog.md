@@ -7,6 +7,7 @@
 
 - The bundled `benchmark-update` skill now grades each cell ✅, 🟡 or ❌, links it to its evidence, and audits blank cells against quoted sources.
 - The bundled `repomatic-upgrade` skill now runs the newly pinned `mypy` and `ruff` on the untouched tree, since the changelog often leaves a tool bump out.
+- The bundled `repomatic-upgrade` skill now tells a local edit that upstream already holds from one the upgrade drops, with a three-way merge.
 
 ## [`7.18.0` (2026-10-13)](https://github.com/kdeldycke/repomatic/compare/v7.17.1...v7.18.0)
 
