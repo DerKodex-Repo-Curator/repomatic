@@ -250,6 +250,8 @@ Pull requests and issues still pending upstream.
 
 - [`bump-my-version#146` - Non-matching glob patterns don't raise `FileNotFoundError`](https://github.com/callowayproject/bump-my-version/issues/146)
 
+- [`coveragepy#2330` - feat: name the data file in the `Can't combine` error](https://github.com/coveragepy/coveragepy/pull/2330): `coverage combine` stops on a mix of branch and statement data, and its error names no data file. The `lowest-direct` cell of `tests.yaml` hit it: pytest-cov `4.0.0` measured a child interpreter that a test started in another directory. That test now removes the `COV_CORE_*` and `COVERAGE_*` variables from the environment of its child.
+
 - [`lychee#2249` - Recognize `{#id}` heading anchors in `--include-fragments`](https://github.com/lycheeverse/lychee/issues/2249): closed by [`lychee#2250`](https://github.com/lycheeverse/lychee/pull/2250), which no stable release carries yet.
 
 - [`lychee#1772` - Suggest alternative frontend services from LibRedirect](https://github.com/lycheeverse/lychee/issues/1772)
