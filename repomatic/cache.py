@@ -780,7 +780,7 @@ def auto_purge() -> None:
 
     Called automatically after {func}`store_binary` and
     {func}`store_response`, and runs at most once per cache root per process
-    (see {data}`_PURGED_ROOTS`). Purges both binary and HTTP cache entries.
+    (see `_PURGED_ROOTS`). Purges both binary and HTTP cache entries.
     Resolves the TTL from `REPOMATIC_CACHE_MAX_AGE` env var, then
     `cache.max-age` in `[tool.repomatic]`, then the
     `CacheConfig.max_age` field default. Set to `0` to disable.

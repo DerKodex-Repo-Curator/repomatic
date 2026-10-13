@@ -53,14 +53,16 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 pytestmark = [
-    pytest.mark.skipif(
-        shutil.which("claude") is None,
-        reason="needs the Claude Code CLI to answer for its own behavior",
-    ),
     # Nothing in the repomatic package is exercised here, so the matrix run that
     # holds the coverage floor loses nothing by filtering this out.
     pytest.mark.once,
 ]
+
+# Kept out of `pytestmark`: the test of the `egress` fixture runs no CLI.
+needs_cli = pytest.mark.skipif(
+    shutil.which("claude") is None,
+    reason="needs the Claude Code CLI to answer for its own behavior",
+)
 
 PLUGIN_NAME = "citylog"
 MARKETPLACE_NAME = "orchard"
@@ -93,6 +95,9 @@ def egress(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     forwards nothing takes whatever the switch does not cover, and keeps each
     request line for the test to assert on.
 
+    A sandbox can refuse the bind on the loopback. The test is then skipped:
+    without the proxy, nothing proves that the CLI stays on this machine.
+
     :return: The request line of every call the proxy refused.
     """
     asked: list[str] = []
@@ -105,7 +110,11 @@ def egress(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
             asked.append(self.rfile.readline().decode("ISO-8859-1").strip())
             self.wfile.write(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
 
-    with socketserver.TCPServer(("127.0.0.1", 0), Refusal) as proxy:
+    try:
+        proxy = socketserver.TCPServer(("127.0.0.1", 0), Refusal)
+    except PermissionError as error:
+        pytest.skip(f"cannot bind the proxy on the loopback: {error}")
+    with proxy:
         threading.Thread(target=proxy.serve_forever, daemon=True).start()
         address = f"http://127.0.0.1:{proxy.server_address[1]}"
         monkeypatch.setenv(OFFLINE_SWITCH, "1")
@@ -192,6 +201,7 @@ def _update_outcome(config: Path) -> str | None:
     return None
 
 
+@needs_cli
 def test_cli_update_detection_reads_the_plugin_manifest(
     tmp_path: Path, egress: list[str]
 ) -> None:
@@ -278,3 +288,20 @@ def test_cli_update_detection_reads_the_plugin_manifest(
         f"the CLI asked a proxy for {sorted(set(egress))}, so {OFFLINE_SWITCH} no "
         "longer keeps this scene on the machine; measure what it covers again"
     )
+
+
+def test_egress_skips_when_the_loopback_refuses_a_bind(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bind that the sandbox refuses skips the test, with the error as reason.
+
+    Any other error of the bind still fails: only `PermissionError` says that
+    the machine forbids the proxy.
+    """
+
+    def refuse(server: socketserver.TCPServer) -> None:
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(socketserver.TCPServer, "server_bind", refuse)
+    with pytest.raises(pytest.skip.Exception, match="Operation not permitted"):
+        request.getfixturevalue("egress")

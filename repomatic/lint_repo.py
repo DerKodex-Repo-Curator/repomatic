@@ -832,9 +832,10 @@ def check_pat_stale_statuses_permission(repo: str) -> CheckResult:
     `REPOMATIC_PAT` stopped needing `statuses:write` once the Renovate
     integration (and its `stability-days` status checks) was removed. A
     fine-grained PAT cannot report its own granted permissions, so this probes
-    behaviorally: it attempts to create a commit status on {data}`NULL_SHA`, a
-    SHA that never resolves to a commit. GitHub authorizes the request before
-    validating the resource, which splits the outcomes cleanly:
+    behaviorally: it attempts to create a commit status on
+    {data}`~repomatic.github.actions.NULL_SHA`, a SHA that never resolves to a
+    commit. GitHub authorizes the request before validating the resource, which
+    splits the outcomes cleanly:
 
     - **HTTP 403**: the token lacks `statuses:write` (correctly scoped).
     - **HTTP 422** (`No commit found for SHA`): authorization passed and only
@@ -843,9 +844,9 @@ def check_pat_stale_statuses_permission(repo: str) -> CheckResult:
 
     ```{note}
 
-    Because {data}`NULL_SHA` never resolves, no commit status is ever
-    created: the probe mutates nothing. Only an unambiguous 422 raises the
-    warning, so a future change to GitHub's authorize-before-validate
+    Because {data}`~repomatic.github.actions.NULL_SHA` never resolves, no commit
+    status is ever created: the probe mutates nothing. Only an unambiguous 422
+    raises the warning, so a future change to GitHub's authorize-before-validate
     ordering degrades to under-reporting rather than a false warning.
     ```
 
@@ -891,7 +892,7 @@ class RepoSettingProbe:
     The repo-setting checks share one shape: read one API endpoint through
     `gh`, inspect one field, and map its value onto a pass, a failure naming
     the settings page, or an indeterminate skip. What varies is declared
-    here; {func}`_check_repo_setting` runs it. A probe with no *passing* set
+    here; `_check_repo_setting` runs it. A probe with no *passing* set
     reads its field as a boolean toggle and never skips on an unknown value.
     """
 
@@ -1361,7 +1362,7 @@ def check_pypi_trusted_publisher(
     OIDC: see {func}`repomatic.pypi.get_trusted_publishers`.
     This check probes the latest release's provenance and looks for a
     bundle whose `repository` matches `repo` and whose `workflow`
-    is {data}`PYPI_TRUSTED_PUBLISHER_WORKFLOW`.
+    is {data}`~repomatic.pypi.PYPI_TRUSTED_PUBLISHER_WORKFLOW`.
     A match means the publisher is wired up and a previous release uploaded
     successfully through it.
     A mismatch (provenance exists but names a different repo or workflow)

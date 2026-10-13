@@ -39,7 +39,7 @@ from click_extra import (
 )
 
 from ..tooling.tool_registry import TOOL_REGISTRY
-from ..tooling.tool_runner import download_to
+from ..tooling.tool_runner import download_with_retry
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
@@ -49,18 +49,21 @@ if TYPE_CHECKING:
 def _download_sha256(url: str) -> str:
     """Download a URL and return its SHA-256 hex digest.
 
-    Streams through {func}`~repomatic.tooling.tool_runner.download_to` into a scratch
-    file, inheriting its stall timeout and Content-Length truncation guard. A
-    short body must fail loudly here: its digest would otherwise be written
-    into `tool_registry.py` as the new canonical checksum, poisoning every
-    later verified install. Feedback is suppressed because the caller fans
-    downloads out under its own `OperationTrail`.
+    Streams through {func}`~repomatic.tooling.tool_runner.download_with_retry`
+    into a scratch file, inheriting its retries, its stall timeout and its
+    Content-Length truncation guard. The retries are what keep one transient
+    failure from ending a batch over every binary of the registry. A short
+    body must fail loudly here: its digest would otherwise be written into
+    `tool_registry.py` as the new canonical checksum, poisoning every later
+    verified install. Feedback is suppressed because the caller fans downloads
+    out under its own `OperationTrail`.
 
     :param url: The URL to download.
     :return: Lowercase hex SHA-256 digest of the response body.
+    :raises OSError: If every attempt fails at the network level.
     """
     with tempfile.TemporaryDirectory(prefix="repomatic-checksum-") as scratch:
-        digest = download_to(url, Path(scratch) / "artifact", progress=False)
+        digest = download_with_retry(url, Path(scratch) / "artifact", progress=False)
     logging.debug(f"SHA-256 of {url}: {digest}")
     return digest
 

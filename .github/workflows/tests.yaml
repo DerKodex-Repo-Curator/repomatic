@@ -159,7 +159,7 @@ jobs:
         run: echo "PYTHONIOENCODING=utf8" >> "$GITHUB_ENV"
       - name: Install project
         run: uv --no-progress sync --frozen --all-extras --group test
-      - name: Resolve to ${{ matrix.resolution }} versions
+      - name: Resolve again (${{ matrix.resolution || 'not requested' }})
         # A cell carrying a `resolution` key resolves the project again with it: `lowest-direct` installs every direct
         # dependency at the floor its specifier declares, which the lockfile never does. The rewritten `uv.lock` stays
         # in this checkout, where the `--frozen` steps below read it.

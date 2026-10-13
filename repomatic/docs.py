@@ -44,8 +44,8 @@ def validate_docs_script_path(script: str, repo_root: Path) -> Path | None:
     :param script: Configured `docs.update-script` path, relative to the repo.
     :param repo_root: Repository root the script path resolves against.
     :return: The resolved path, or `None` when the configured value is empty.
-    :raises ClickException: If the path escapes the repository root or is not
-        a `.py` file under `docs/`.
+    :raises click.ClickException: If the path escapes the repository root or is
+        not a `.py` file under `docs/`.
     """
     if not script:
         return None

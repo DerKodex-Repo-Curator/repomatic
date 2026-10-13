@@ -249,7 +249,7 @@ class FileEntry:
     def is_enabled(self, config: object) -> bool:
         """Whether this entry is enabled by the given `Config` object.
 
-        See {func}`_config_enabled` for the resolution rule.
+        See `_config_enabled` for the resolution rule.
 
         :param config: A {class}`~repomatic.config.Config` instance.
         """
@@ -331,7 +331,7 @@ class Component:
     def is_enabled(self, config: object) -> bool:
         """Whether this component is enabled by the given `Config` object.
 
-        See {func}`_config_enabled` for the resolution rule.
+        See `_config_enabled` for the resolution rule.
 
         :param config: A {class}`~repomatic.config.Config` instance.
         """

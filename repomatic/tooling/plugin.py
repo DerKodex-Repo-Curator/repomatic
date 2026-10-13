@@ -435,7 +435,7 @@ def render_plugin_settings(
 ) -> str:
     """Merge the plugin wiring into an existing settings document.
 
-    Only the two keys {func}`_plugin_settings` owns are touched, and within them
+    Only the two keys `_plugin_settings` owns are touched, and within them
     only the entries this plugin and marketplace are named by: a repository's own
     permissions, hooks and any unrelated marketplace survive untouched.
 
@@ -445,7 +445,7 @@ def render_plugin_settings(
     the indent has to be negotiated.
 
     :param existing: Current file content, or an empty string when absent.
-    :param indent: One level of indentation, from {func}`_biome_json_indent`.
+    :param indent: One level of indentation, from `_biome_json_indent`.
     :return: The merged document, newline-terminated.
     :raises TypeError: If *existing* is not a JSON object.
     """
@@ -482,7 +482,7 @@ def merge_plugin_settings(target: Path, root: Path | None = None) -> bool:
 
     A first write still lands in this module's own style, which `format-json`
     then settles once. That is the same one-reformat cost
-    {func}`_biome_json_indent` accepts when it has to guess.
+    `_biome_json_indent` accepts when it has to guess.
 
     :param target: Path to the Claude Code settings file to update.
     :param root: Repository root whose Biome config sets the indent. Defaults to

@@ -103,8 +103,9 @@ def load_pyproject_tool_section(tool_name: str) -> dict[str, Any]:
 
     Returns the live `tomlrt.Table` (a `dict` subclass) rather than a plain-dict
     copy, so the section keeps its comment trivia for formats that can preserve
-    it on materialization (see {meth}`NativeFormat.serialize`). Callers that only
-    read values or test truthiness are unaffected.
+    it on materialization (see
+    {meth}`~repomatic.tooling.tool_registry.NativeFormat.serialize`). Callers
+    that only read values or test truthiness are unaffected.
 
     :return: The tool's config table, or empty dict if not found.
     """
@@ -393,7 +394,7 @@ lost its windows-x64 attestation sidecar to a one-off
 `CERTIFICATE_VERIFY_FAILED: self-signed certificate` from a Windows runner's
 TLS-intercepting proxy, and short bodies surface as the truncation guard's
 `OSError`. One artifact download aborting a whole release job over a
-transient is the wrong trade, so the verification seam retries with a short
+transient is the wrong trade, so `download_with_retry` retries with a short
 pause and lets only a repeated failure surface.
 ```
 """
@@ -414,7 +415,7 @@ def download_to(
     concurrent callers whose fan-out draws its own progress display.
 
     The single download seam for every artifact repomatic fetches by hand:
-    whatever consumes the digest (verification in {func}`_download_and_verify`,
+    whatever consumes the digest (verification in `_download_and_verify`,
     checksum harvesting in `checksums.py`) builds on this so the truncation
     guard below applies to all of them. A short body (proxy hiccup, dropped
     connection) hashes to a wrong digest, so without the guard it would surface
@@ -467,32 +468,31 @@ def download_to(
     return sha256.hexdigest()
 
 
-def _download_and_verify(
+def download_with_retry(
     url: str,
-    expected_sha256: str | None,
     dest_path: Path,
     *,
     label: str | None = None,
-) -> None:
-    """Download a file and verify its SHA-256 checksum.
+    progress: bool = True,
+) -> str:
+    """Download *url* through {func}`download_to`, and retry a network failure.
 
     Network-level failures (TLS errors, timeouts, truncated bodies: all
     `OSError` subclasses, `URLError` included) are retried up to
-    {data}`_DOWNLOAD_ATTEMPTS` times; a checksum mismatch on a complete body
-    is not, since identical bytes would fail identically.
+    `_DOWNLOAD_ATTEMPTS` times, after a pause that grows with each
+    attempt. A failed attempt leaves no partial file behind.
 
     :param url: URL to download.
-    :param expected_sha256: Expected lowercase hex SHA-256 digest.
-        `None` skips verification (logs the computed digest for reference).
     :param dest_path: Where to write the downloaded file.
     :param label: Progress bar label. Defaults to the destination filename.
+    :param progress: Draw per-download feedback on interactive terminals.
+    :return: Lowercase hex SHA-256 digest of the downloaded bytes.
     :raises OSError: If every attempt fails at the network level, including a
         body shorter than the advertised `Content-Length`.
-    :raises ValueError: If the checksum does not match.
     """
     for attempt in range(1, _DOWNLOAD_ATTEMPTS + 1):
         try:
-            actual = download_to(url, dest_path, label=label)
+            digest = download_to(url, dest_path, label=label, progress=progress)
             break
         except OSError as ex:
             dest_path.unlink(missing_ok=True)
@@ -503,6 +503,32 @@ def _download_and_verify(
                 f" failed ({ex}); retrying."
             )
             time.sleep(2 * attempt)
+    return digest
+
+
+def _download_and_verify(
+    url: str,
+    expected_sha256: str | None,
+    dest_path: Path,
+    *,
+    label: str | None = None,
+) -> None:
+    """Download a file and verify its SHA-256 checksum.
+
+    {func}`download_with_retry` retries a network-level failure. A checksum
+    mismatch on a complete body is not retried, since identical bytes would
+    fail identically.
+
+    :param url: URL to download.
+    :param expected_sha256: Expected lowercase hex SHA-256 digest.
+        `None` skips verification (logs the computed digest for reference).
+    :param dest_path: Where to write the downloaded file.
+    :param label: Progress bar label. Defaults to the destination filename.
+    :raises OSError: If every attempt fails at the network level, including a
+        body shorter than the advertised `Content-Length`.
+    :raises ValueError: If the checksum does not match.
+    """
+    actual = download_with_retry(url, dest_path, label=label)
     if expected_sha256 is None:
         logging.info(f"SHA-256 of {url}: {actual} (not verified).")
         return
@@ -899,7 +925,6 @@ def _build_install_args(spec: ToolSpec, exclude_newer: str | None = None) -> lis
     already in that virtualenv when a `uv.lock` exists, so its command carries
     no `--with` layer: see {func}`_install_into_venv`.
     """
-    package_pin = f"{spec.package or spec.name}=={spec.version}"
     executable = spec.executable or spec.name
 
     if spec.needs_venv:
@@ -908,10 +933,10 @@ def _build_install_args(spec: ToolSpec, exclude_newer: str | None = None) -> lis
             # the install: see _install_into_venv.
             cmd = [*uv_cmd("run", frozen=True), "--no-sync"]
         elif Path("uv.lock").is_file():
-            cmd = [*uv_cmd("run", frozen=True), "--with", package_pin]
+            cmd = [*uv_cmd("run", frozen=True), "--with", spec.pypi_pin]
         else:
             cmd = uv_cmd("run", no_project=True, exclude_newer=exclude_newer)
-            cmd.extend(["--with", package_pin])
+            cmd.extend(["--with", spec.pypi_pin])
         if spec.module:
             cmd.extend(["--", "python", "-m", spec.module])
         else:
@@ -920,7 +945,7 @@ def _build_install_args(spec: ToolSpec, exclude_newer: str | None = None) -> lis
         cmd = uvx_cmd(exclude_newer=exclude_newer)
         for pkg in spec.with_packages:
             cmd.extend(["--with", pkg])
-        cmd.extend(["--from", package_pin, executable])
+        cmd.extend(["--from", spec.pypi_pin, executable])
 
     return cmd
 
@@ -942,8 +967,7 @@ def _venv_install_args(spec: ToolSpec, venv: str) -> list[str]:
     exemptions from the project's `[tool.uv]` section and from
     `UV_EXCLUDE_NEWER`.
     """
-    package_pin = f"{spec.package or spec.name}=={spec.version}"
-    return [*uv_cmd("pip"), "install", "--python", venv, package_pin]
+    return [*uv_cmd("pip"), "install", "--python", venv, spec.pypi_pin]
 
 
 def _install_into_venv(spec: ToolSpec) -> None:
@@ -955,8 +979,8 @@ def _install_into_venv(spec: ToolSpec) -> None:
     {attr}`~repomatic.tooling.tool_registry.ToolSpec.install_into_venv` for
     the reason.
 
-    :raises ClickException: uv cannot locate the virtualenv, or cannot install
-        the tool into it.
+    :raises click.ClickException: uv cannot locate the virtualenv, or cannot
+        install the tool into it.
     """
     locate = [
         *uv_cmd("run", frozen=True),
@@ -1041,8 +1065,8 @@ def ensure_binary(name: str) -> Path:
     :param name: Registry key of a tool whose
         {class}`~repomatic.tooling.tool_registry.ToolSpec` declares a `binary`.
     :return: Absolute path to the ready-to-run executable.
-    :raises ClickException: If the tool is unknown, ships no binary, or cannot
-        be downloaded and verified.
+    :raises click.ClickException: If the tool is unknown, ships no binary, or
+        cannot be downloaded and verified.
     """
     spec = TOOL_REGISTRY.get(name)
     if spec is None or spec.binary is None:
@@ -1095,8 +1119,8 @@ def _path_tools_env(
     :param path_dirs: Accumulator the caller cleans up in its `finally` block.
     :return: The environment to hand the child, or `None` to inherit unchanged
         when the tool declares no companions.
-    :raises ClickException: If a companion fails to install for any reason other
-        than the platform having no binary at all.
+    :raises click.ClickException: If a companion fails to install for any reason
+        other than the platform having no binary at all.
     """
     if not spec.path_tools:
         return None
@@ -1164,6 +1188,13 @@ def resolve_default_args(spec: ToolSpec) -> list[list[str]] | None:
     return [[*base, *paths]]
 
 
+GIT_DIRECTORY = ".git"
+"""Directory `_digest_targets` leaves out of the tree it walks.
+
+No tool rewrites a file there, and another process can: an editor that
+refreshes the index during a run would read as a file the tool rewrote.
+"""
+
 TOOL_CRASH_EXIT_CODE = 70
 """Exit code reported when a tool contradicts its own rewrite status.
 
@@ -1177,7 +1208,8 @@ land on the code that means "I reformatted a file". See
 def _digest_targets(args: Sequence[str]) -> dict[str, str]:
     """Digest every existing file among a batch's arguments.
 
-    Directories are walked, so a tool pointed at a tree is covered too.
+    Directories are walked, so a tool pointed at a tree is covered too. The
+    walk never enters a {data}`GIT_DIRECTORY` below a directory argument.
     Non-path arguments (flags, their values) simply do not exist on disk and
     are skipped, which needs no flag parsing: a flag that happens to name a
     real file is digested harmlessly.
@@ -1191,7 +1223,14 @@ def _digest_targets(args: Sequence[str]) -> dict[str, str]:
         if path.is_file():
             candidates = [path]
         elif path.is_dir():
-            candidates = [child for child in path.rglob("*") if child.is_file()]
+            candidates = []
+            for root, folders, files in os.walk(path):
+                # Removed in place, which is what keeps the walk out of it.
+                if GIT_DIRECTORY in folders:
+                    folders.remove(GIT_DIRECTORY)
+                candidates.extend(
+                    child for name in files if (child := Path(root, name)).is_file()
+                )
         else:
             continue
         for candidate in candidates:
@@ -1461,7 +1500,8 @@ def verify_via_write_path(
         is already formatted and `1` otherwise, and `drifted` names the paths
         the write path would have changed. A tool that fails on the copies
         yields its own exit code and no drift, since it measured nothing. So
-        does a call with no existing path to copy, which yields `2`.
+        does a call with no existing path to copy, which yields `2`, and a
+        path that cannot be copied, which is logged and yields `2` too.
     """
     spec = TOOL_REGISTRY[name]
     # An argument resolving to the working directory means "every file the tool
@@ -1516,11 +1556,20 @@ def verify_via_write_path(
                 # fall back to the basename.
                 relative = Path(source.name)
             copy = scratch / relative
-            copy.parent.mkdir(parents=True, exist_ok=True)
-            if source.is_dir():
-                shutil.copytree(source, copy)
-            else:
-                shutil.copy2(source, copy)
+            try:
+                copy.parent.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    shutil.copytree(source, copy)
+                else:
+                    shutil.copy2(source, copy)
+            except OSError as error:
+                # A partial copy measures nothing: the tool would format half a
+                # tree, and the comparison would report the rest as clean.
+                logging.error(
+                    f"{name}: cannot copy {source} to verify it ({error}), nothing"
+                    " verified."
+                )
+                return 2, []
             pairs.append((source, copy))
             rewritten.append(str(copy))
 
@@ -1626,7 +1675,8 @@ def resolve_config_source(spec: ToolSpec) -> str:
 def find_unmodified_configs(root: Path | None = None) -> list[tuple[str, str]]:
     """Find native config files identical to their bundled defaults.
 
-    Iterates over every tool in {data}`TOOL_REGISTRY` that has a
+    Iterates over every tool in
+    {data}`~repomatic.tooling.tool_registry.TOOL_REGISTRY` that has a
     `default_config`.  For each, checks whether any of its
     `native_config_files` exists on disk and is content-identical
     to the bundled default after trailing-whitespace normalization.

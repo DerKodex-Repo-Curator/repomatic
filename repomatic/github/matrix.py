@@ -56,7 +56,7 @@ RESERVED_MATRIX_KEYWORDS = ("include", "exclude")
 """Keys GitHub reserves inside a `strategy.matrix` block.
 
 Neither can name a variation axis, since both already mean something to the
-matrix expander. {meth}`Matrix._check_ids` rejects them.
+matrix expander. `Matrix._check_ids` rejects them.
 """
 
 
@@ -105,10 +105,10 @@ class Matrix:
     - {meth}`add_includes`
     - {meth}`add_excludes`
 
-    {meth}`matrix` renders the result as an immutable {class}`FrozenDict` for
-    serialization, and {meth}`__getitem__` reads a single axis, but the object
-    itself is not a mapping: it holds axes, includes and excludes as separate
-    state.
+    {meth}`matrix` renders the result as an immutable
+    {class}`~boltons.dictutils.FrozenDict` for serialization, and `__getitem__`
+    reads a single axis, but the object itself is not a mapping: it holds axes,
+    includes and excludes as separate state.
 
     The implementation respects the order in which items were inserted. This provides a
     natural and visual sorting that should ease the inspection and debugging of large

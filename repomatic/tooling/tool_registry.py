@@ -110,7 +110,7 @@ class UnsupportedPlatformError(RuntimeError):
     rather than a fault: nothing about the current run can make the binary
     exist. Asking for such a tool directly is still fatal, but a caller
     provisioning it as a *companion* can catch this alone and carry on without
-    it. See {func}`repomatic.tooling.tool_runner._path_tools_env`.
+    it. See `repomatic.tooling.tool_runner._path_tools_env`.
     """
 
 
@@ -443,7 +443,7 @@ class BinarySpec:
 
         When `archive_format` is a single {class}`ArchiveFormat`, returns
         it directly. When it is a dict, resolves through
-        {meth}`_resolve_per_platform`.
+        `_resolve_per_platform`.
         """
         if isinstance(self.archive_format, ArchiveFormat):
             return self.archive_format
@@ -456,7 +456,7 @@ class BinarySpec:
         """Return the leading path components to strip for a platform key.
 
         When {attr}`strip_components` is a plain `int`, returns it directly.
-        When it is a dict, resolves through {meth}`_resolve_per_platform`.
+        When it is a dict, resolves through `_resolve_per_platform`.
         """
         if isinstance(self.strip_components, int):
             return self.strip_components
@@ -500,7 +500,7 @@ choices from it.
 NPM_MIN_VERSION_FOR_COOLDOWN = "11.10.0"
 """First npm release honoring `min-release-age`, the cooldown gate for npm tools.
 
-Older npm silently ignores the `--min-release-age` flag, so {func}`_install_npm`
+Older npm silently ignores the `--min-release-age` flag, so `_install_npm`
 warns when it cannot enforce the cooldown. This is a fixed floor (the release that
 introduced the option), distinct from the auto-bumped `npm@X` bootstrap pin in
 `lint.yaml`, which tracks the latest npm.
@@ -879,6 +879,16 @@ class ToolSpec:
         and the held-back PR links query this stripped name (`nuitka`) instead.
         """
         return Requirement(self.package or self.name).name
+
+    @property
+    def pypi_pin(self) -> str:
+        """Exact PyPI requirement that installs the pinned {attr}`version`.
+
+        The install extra of {attr}`package` stays, as in `nuitka[onefile]==4.3`:
+        this is the string `uvx --from`, `uv run --with` and `uv pip install`
+        take.
+        """
+        return f"{self.package or self.name}=={self.version}"
 
     @property
     def datasource_url(self) -> str:

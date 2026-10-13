@@ -634,7 +634,7 @@ def run_cloudflare_pages(
         converges on the declared state instead of failing on the API's
         `409`.
     :param attach_domain: Serve the project at this hostname, creating the DNS
-        record it needs when the credential can. See {func}`_attach_domain`.
+        record it needs when the credential can. See `_attach_domain`.
     :param compatibility_date: Declared Workers runtime date, empty for
         unmanaged.
     :param placement: Declared Smart Placement mode, empty for unmanaged.

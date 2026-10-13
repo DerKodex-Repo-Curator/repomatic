@@ -423,6 +423,11 @@ class ComponentSelector(ParamType):
     def convert(
         self, value: Any, param: Parameter | None, ctx: ClickContext | None
     ) -> str:
+        """Check that *value* names a component, or one file of a component.
+
+        :return: The selector, unchanged.
+        :raises click.BadParameter: The selector names neither.
+        """
         try:
             parse_component_entries([value], context="selection")
         except ValueError as e:

@@ -9,21 +9,27 @@ This page documents the version specifier conventions and dependency audit proce
 1. **Use `>=` (not `~=` or `==`).** Relaxed lower bounds give packagers freedom to release security hotfixes without waiting for an upstream bump. Upper bounds are [forbidden](https://iscinumpy.dev/post/bound-version-constraints/).
 2. **Every version bound needs a comment tying the floor to a concrete code dependency.** The comment goes on the line above the dependency and states which feature, method, or API from that version the project actually uses:
    ```toml
-   # wcmatch 10.0 changed globbing semantics; sync_gitignore() relies on
-   # the new symlink-aware matching behavior.
-   "wcmatch>=10",
+   dependencies = [
+     # wcmatch 10.0 changed globbing semantics; sync_gitignore() relies on
+     # the new symlink-aware matching behavior.
+     "wcmatch>=10",
+   ]
    ```
    A good floor comment answers: "if someone installed an older version, what would break and where?"
 3. **The comment documents the floor as it stands, in one short paragraph.** Rewrite it on a bump rather than appending to it: see [§ Rewrite a floor comment, don't extend it](#rewrite-a-floor-comment-dont-extend-it).
 4. **Security fixes are a valid floor bump reason.** A CVE or advisory in an older version justifies raising the floor even when the API is unchanged:
    ```toml
-   # requests 2.32.0 fixes CVE-2024-35195 (session credential leak on redirects).
-   "requests>=2.32",
+   dependencies = [
+     # requests 2.32.0 fixes CVE-2024-35195 (session credential leak on redirects).
+     "requests>=2.32",
+   ]
    ```
 5. **Python version support is not a valid reason to bump a floor.** The dependency resolver already picks the right version via `requires-python` metadata. If `mango>=2` works and mango 5 merely adds Python 3.13 support, keep `>=2`. **Exception:** when a dependency *drops* a Python version your project still supports (or your project drops one, aligning minimum `requires-python`), that alignment is a valid floor bump:
    ```toml
-   # coverage 7.11.0 dropped Python 3.9, matching our requires-python >= 3.10.
-   "coverage>=7.11",
+   dependencies = [
+     # coverage 7.11.0 dropped Python 3.9, matching our requires-python >= 3.10.
+     "coverage>=7.11",
+   ]
    ```
 6. **Use conditional markers for Python-version-gated deps.** Example: `"tomli>=2; python_version<'3.11'"`. When a dep has a version marker, the floor rationale must make sense for the Python versions where the dep is actually installed.
 7. **Alphabetical order** within the list.
@@ -54,19 +60,27 @@ When raising a floor, rewrite the comment around the new version:
 - **Delete** the superseded floors. A version no longer declared cannot break anything for someone running the declared one, and `git log -- pyproject.toml` keeps that history for whoever wants it.
 - **Move out** what is not about this floor: how the package is used across the codebase belongs in the module using it, and a comparison against an alternative package belongs in an `XXX` pointer to the upstream ticket.
 
-```toml
-# Before: three floors deep, and the reader still has to work out what 8.8 does.
-# click-extra 8.8.0 is the floor: `format_size` and `prep_path` moved here.
-# Earlier floors remain in play: `replace_region` (8.7.1) splices the binaries
-# page; `OperationTrail` (8.6.0) renders the resolve trail; `click:config`
-# (8.3) backs configuration.md…
-"click-extra>=8.8",
+Before, three floors deep, and the reader still has to work out what 8.8 does:
 
-# After: the version in force, and what it buys.
-# click-extra 8.8 absorbed the utilities repomatic now delegates to instead of
-# carrying: `format_size` (image and cache reports), `prep_path`/`is_stdout`
-# (CLI `--output`), and `config_table_to_flags` (tool flag translation).
-"click-extra>=8.8",
+```toml
+dependencies = [
+  # click-extra 8.8.0 is the floor: `format_size` and `prep_path` moved here.
+  # Earlier floors remain in play: `replace_region` (8.7.1) splices the binaries
+  # page; `OperationTrail` (8.6.0) renders the resolve trail; `click:config`
+  # (8.3) backs configuration.md…
+  "click-extra>=8.8",
+]
+```
+
+After, the version in force and what it buys:
+
+```toml
+dependencies = [
+  # click-extra 8.8 absorbed the utilities repomatic now delegates to instead of
+  # carrying: `format_size` (image and cache reports), `prep_path`/`is_stdout`
+  # (CLI `--output`), and `config_table_to_flags` (tool flag translation).
+  "click-extra>=8.8",
+]
 ```
 
 ### What is checked automatically

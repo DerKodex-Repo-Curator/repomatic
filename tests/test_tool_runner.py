@@ -82,6 +82,7 @@ from repomatic.tooling.tool_registry import (
 from repomatic.tooling.tool_runner import (
     TOOL_CRASH_EXIT_CODE,
     _build_install_args,
+    _digest_targets,
     _download_and_verify,
     _extract_binary,
     _install_binary,
@@ -421,7 +422,7 @@ def test_uvx_tool_pins_registry_version(name, spec, tmp_path, monkeypatch):
     The pin sits in the command that installs the tool. With a `uv.lock`, a
     tool declaring `install_into_venv` is installed by its own command.
     """
-    pin = f"{spec.package or spec.name}=={spec.version}"
+    pin = spec.pypi_pin
     monkeypatch.chdir(tmp_path)
     for locked in (False, True):
         if locked:
@@ -443,7 +444,7 @@ def test_uvx_tool_pins_registry_version(name, spec, tmp_path, monkeypatch):
 def test_build_install_args_install_into_venv(name, spec, tmp_path, monkeypatch):
     """A tool installed into the project venv runs from it, with no layer."""
     monkeypatch.chdir(tmp_path)
-    pin = f"{spec.package or spec.name}=={spec.version}"
+    pin = spec.pypi_pin
 
     # Without a uv.lock there is no project venv to install into: the tool is
     # layered over an isolated environment, like any other needs_venv tool.
@@ -489,7 +490,7 @@ def test_install_into_venv_installs_the_pin(mock_run, name, spec):
         "install",
         "--python",
         "/orchard/.venv",
-        f"{spec.package or spec.name}=={spec.version}",
+        spec.pypi_pin,
     ]
 
 
@@ -634,6 +635,22 @@ def test_pypi_name_strips_install_extra():
     # Extra stripped, and package=None falls back to the tool name.
     assert ToolSpec(name="papaya", package="papaya[juice]").pypi_name == "papaya"
     assert ToolSpec(name="papaya").pypi_name == "papaya"
+
+
+@pytest.mark.parametrize(
+    ("package", "pin"),
+    [
+        pytest.param(None, "papaya==1.2.3", id="tool-name"),
+        pytest.param("papaya[juice]", "papaya[juice]==1.2.3", id="install-extra"),
+    ],
+)
+def test_pypi_pin_names_the_package_and_its_version(package, pin):
+    """`pypi_pin` is the exact requirement an installer takes, extra included.
+
+    The command tests above read the pin from this property, so its shape is
+    stated here once.
+    """
+    assert ToolSpec(name="papaya", version="1.2.3", package=package).pypi_pin == pin
 
 
 def test_checksum_sidecar_covers_exactly_binary_tools():
@@ -3362,6 +3379,33 @@ def test_run_tool_leaves_other_tools_exit_codes_alone(
     assert run_tool("mdformat") == 1
 
 
+def test_digest_targets_stays_out_of_git_directories(tmp_path, monkeypatch):
+    """A walk below a directory argument never enters a `.git` directory.
+
+    No tool rewrites a file there, and another process can. An index that an
+    editor refreshes during the run would read as a file the tool rewrote. A
+    `.gitignore` file is not in that directory, and stays in the walk.
+    """
+    monkeypatch.chdir(tmp_path)
+    for name, content in (
+        (".git/index", "DIRC"),
+        (".git/objects/pack", "PACK"),
+        (".gitignore", "*.pyc\n"),
+        ("orchard/.git/HEAD", "ref: refs/heads/main\n"),
+        ("orchard/plum.md", "Two plums\n"),
+        ("recipes/pear-tart.md", "Three pears\n"),
+    ):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="UTF-8")
+
+    assert set(_digest_targets(["."])) == {
+        ".gitignore",
+        str(Path("orchard", "plum.md")),
+        str(Path("recipes", "pear-tart.md")),
+    }
+
+
 @patch("repomatic.tooling.tool_runner.run_tool", return_value=TOOL_CRASH_EXIT_CODE)
 def test_verify_via_write_path_propagates_a_crash(mock_run_tool, tmp_path, monkeypatch):
     """A tool that dies on the copies is a failure, not a clean bill of health.
@@ -3432,6 +3476,34 @@ def test_verify_via_write_path_fails_when_nothing_is_copied(
 
     assert exit_code == 2
     assert drifted == []
+    mock_run_tool.assert_not_called()
+    assert not list(tmp_path.glob(".repomatic-verify-*"))
+
+
+@patch("repomatic.tooling.tool_runner.run_tool", return_value=0)
+def test_verify_via_write_path_reports_a_path_it_cannot_copy(
+    mock_run_tool, tmp_path, monkeypatch, caplog
+):
+    """A copy that fails is one logged error that names the path, not a traceback.
+
+    Nothing was measured, so the answer is the `2` of a call that copied no
+    path, and the scratch directory does not outlive the call.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "harvest.md").write_text("# Mango\n", encoding="UTF-8")
+
+    with (
+        patch(
+            "repomatic.tooling.tool_runner.shutil.copy2",
+            side_effect=PermissionError(13, "Permission denied"),
+        ),
+        caplog.at_level(logging.ERROR),
+    ):
+        outcome = verify_via_write_path("mdformat", extra_args=("harvest.md",))
+
+    assert outcome == (2, [])
+    assert "cannot copy harvest.md" in caplog.text
+    assert "Permission denied" in caplog.text
     mock_run_tool.assert_not_called()
     assert not list(tmp_path.glob(".repomatic-verify-*"))
 

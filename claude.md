@@ -63,10 +63,11 @@ When adding a tool that repomatic shells out to, register it and reach it throug
 
 ### Documented exemptions this repository claims
 
-Three installs deliberately bypass the window. The first two are per-package and never widen to the rest of the tree; the third is a whole job, and says why it has to be.
+Four installs deliberately bypass the window. The first three are per-package and never widen to the rest of the tree; the fourth is a whole job, and says why it has to be.
 
 - **The upstream toolkit's own pin.** `repomatic` runs from a pin that moves in lockstep with the `uses:` refs pointing at it, so a release must be installable the minute it is published or every downstream repo breaks until the window elapses. The release freeze emits an `--exclude-newer-package` escape hatch beside the pin it writes.
 - **A security fix still inside the window.** `audit --fix` reaches a CVE fix through an `exclude-newer-package` entry rather than lifting `exclude-newer` for everything.
+- **A registry tool pinned ahead of the window.** A hand bump can pin a tool before its release clears the window. A dated `exclude-newer-package` entry in `pyproject.toml` then admits it, and `sync-uv-lock` prunes the entry once the window has passed its date. The entry covers this repository alone: a downstream repository that adopts the release before that date needs the same entry.
 - **The `test-package-install` job.** Its subject *is* the freshly published artifact, so a cooldown would make the question it exists to answer unanswerable. Scoping the opt-out to one job is what keeps it honest: it holds no secrets, inherits `permissions: {}`, and only runs `--version` on a throwaway runner.
 
 ### Commit messages: the `[changelog]` prefix invariant

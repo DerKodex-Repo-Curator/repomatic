@@ -377,7 +377,7 @@ def upsert_pr(
     :param labels: Labels to attach, best-effort.
     :param assignees: Assignees to attach, best-effort.
     :param draft: Hold the pull request in draft, on every update and not just
-        at creation. See {func}`_set_draft`.
+        at creation. See `_set_draft`.
     :param add_paths: Git pathspecs limiting what the uncommitted-changes
         commit picks up. Empty commits the whole tree, which is right for a job
         whose only writes are the ones it means to publish. A job that also

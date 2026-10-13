@@ -41,6 +41,7 @@ from repomatic.deps.uv import (
     compute_bypass_forecasts,
     compute_pruned_forecasts,
     freeze_exclude_newer_packages,
+    packages_outside_cooldown,
     parse_lock_specifiers,
     project_exclude_newer,
     prune_stale_exclude_newer_packages,
@@ -550,6 +551,18 @@ def test_add_matches_a_lock_name_in_any_spelling(tmp_path, name):
         f'exclude-newer-package = {{ {name} = "2026-07-03T00:00:00Z" }}'
         in pyproject.read_text(encoding="UTF-8")
     )
+
+
+@pytest.mark.parametrize("name", LOCK_NAME_SPELLINGS)
+def test_outside_cooldown_matches_a_lock_name_in_any_spelling(tmp_path, name):
+    """A release that cleared the window needs no exemption in any spelling.
+
+    A lookup by the raw name finds no upload time, and the package is exempted
+    like a git or path source.
+    """
+    pyproject = _write_uv_config(tmp_path, 'exclude-newer = "1 week"\n')
+    lock = _write_lock(tmp_path, ("lemon-curd", "2.0.0", "2026-01-01T12:00:00Z"))
+    assert packages_outside_cooldown(pyproject, lock, {name}) == set()
 
 
 def test_compute_bypass_forecasts_reports_freezes_only(tmp_path):

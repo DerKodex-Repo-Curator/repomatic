@@ -145,8 +145,9 @@ def test_successor_prefers_released_over_preview(
 def test_successor_accepts_a_same_version_sibling(catalog) -> None:
     """A dying image with only a same-version sibling still has somewhere to go.
 
-    Version is not filtered here, unlike {func}`newer_version_than`: staying on
-    an image with an end date is worse than moving sideways to one without.
+    Version is not filtered here, unlike
+    {func}`~repomatic.runner_catalog.newer_version_than`: staying on an image
+    with an end date is worse than moving sideways to one without.
     """
     deprecated_arm = RunnerImage(
         "Windows 11 Arm64", "arm64", ("windows-11-arm",), False, True

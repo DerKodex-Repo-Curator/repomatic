@@ -255,7 +255,7 @@ def packages_outside_cooldown(
 
     :param pyproject_path: Path to the `pyproject.toml` file.
     :param lock_path: Path to the `uv.lock` file.
-    :param packages: Candidate package names.
+    :param packages: Candidate package names, in any PEP 503 spelling.
     :return: The subset that actually requires a `"0 day"` override.
     """
     exclude_newer_str = project_exclude_newer(pyproject_path)
@@ -267,10 +267,10 @@ def packages_outside_cooldown(
         # Cannot determine window: be safe and exempt everything.
         return packages
 
-    upload_times = parse_lock_upload_times(lock_path)
+    lock = LockFile.load(lock_path)
     outside: set[str] = set()
     for pkg in packages:
-        upload_str = upload_times.get(pkg, "")
+        upload_str = lock.upload_time_of(pkg)
         if not upload_str:
             # No upload time (git/path source): exempt to be safe.
             outside.add(pkg)
@@ -426,7 +426,7 @@ def freeze_cutoff_after(day: date) -> str:
     """The `exclude-newer-package` cutoff holding a version uploaded on *day*.
 
     One day of margin, rounded to a whole-day UTC boundary: see
-    {func}`_freeze_cutoff` for the full margin and timezone rationale. The
+    `_freeze_cutoff` for the full margin and timezone rationale. The
     single source of that policy, shared with
     {class}`repomatic.deps.dep_sources.ReleaseSwap`.
 
@@ -791,7 +791,7 @@ class LockFile:
     and passing the result around keeps that to two: the pre-upgrade state and
     the post-upgrade one.
 
-    The `parse_lock_*` functions remain as thin wrappers for callers holding
+    {func}`parse_lock_versions` remains as a thin wrapper for callers holding
     only a path.
     """
 
@@ -899,18 +899,6 @@ def parse_lock_versions(lock_path: Path) -> dict[str, str]:
     :return: A dict mapping normalized package names to their version strings.
     """
     return LockFile.load(lock_path).versions
-
-
-def parse_lock_upload_times(lock_path: Path) -> dict[str, str]:
-    """Parse a `uv.lock` file and return a mapping of package names to upload times.
-
-    Extracts the `upload-time` field from each package's `sdist` entry.
-
-    :param lock_path: Path to the `uv.lock` file.
-    :return: A dict mapping normalized package names to ISO 8601 upload-time
-        strings. Packages without an `sdist` or `upload-time` are omitted.
-    """
-    return LockFile.load(lock_path).upload_times
 
 
 _LOCK_PARSE_CACHE: dict[Path, tuple[int, int, dict[str, Any]]] = {}

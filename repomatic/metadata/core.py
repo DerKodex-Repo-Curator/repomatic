@@ -608,16 +608,17 @@ class Metadata(
         """Lazy value factories for every metadata key, in output order.
 
         Each value is computed only when its key is included, so
-        `keys=("is_python_project",)` skips {attr}`nuitka_matrix` and the git
-        history walk it pulls in.
+        `keys=("is_python_project",)` skips
+        {attr}`~repomatic.metadata.matrix.MatrixMetadata.nuitka_matrix` and the
+        git history walk it pulls in.
 
         Split out of {meth}`dump` so the key inventory is inspectable without
         computing anything: `tests/test_metadata.py` asserts these names match
-        {data}`_METADATA_KEY_DESCRIPTIONS` plus
-        {func}`_metadata_config_fields`, which is what keeps `--list-keys`,
+        `_METADATA_KEY_DESCRIPTIONS` plus
+        `_metadata_config_fields`, which is what keeps `--list-keys`,
         {func}`all_metadata_keys` and the emitted output from drifting apart.
 
-        Derived from {data}`_METADATA_KEY_DESCRIPTIONS` rather than re-listing
+        Derived from `_METADATA_KEY_DESCRIPTIONS` rather than re-listing
         every key: most keys read the attribute of the same name, so only the
         handful whose value is not a plain attribute carry an explicit
         factory.

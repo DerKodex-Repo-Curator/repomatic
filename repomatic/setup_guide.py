@@ -292,7 +292,10 @@ class SetupStep:
     """Template rendered as the section's body."""
 
     probe: Callable[[GuideContext], bool | None] = lambda ctx: False
-    """Read the step's completion state. Tri-state, per {class}`CheckResult`."""
+    """Read the step's completion state.
+
+    Tri-state, per {class}`~repomatic.lint_repo.CheckResult`.
+    """
 
     applies: Callable[[GuideContext], bool] = lambda ctx: True
     """Whether this repository needs the step at all.

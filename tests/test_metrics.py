@@ -553,8 +553,9 @@ def test_reconstruct_gives_up_on_an_unparsable_page(monkeypatch):
 def test_reconstruct_walk_is_bounded(monkeypatch):
     """Check a server that never runs out of pages cannot loop forever.
 
-    GitHub refuses past {data}`STAR_HISTORY_MAX_PAGES`, so the walk stops
-    there on its own rather than trusting the endpoint to end the sequence.
+    GitHub refuses past {data}`~repomatic.metrics.STAR_HISTORY_MAX_PAGES`, so
+    the walk stops there on its own rather than trusting the endpoint to end the
+    sequence.
     """
     calls = {"count": 0}
 

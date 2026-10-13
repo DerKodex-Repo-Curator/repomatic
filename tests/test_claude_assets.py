@@ -76,6 +76,14 @@ from repomatic.tooling.bundle import get_data_content
 
 from .conftest import PROJECT_ROOT, WORKFLOWS_DIR, docs_heading_slug
 
+CODE_FENCE_RE = re.compile(r"^[ \t]*(?P<marker>`{3,}(?!.*`)|~{3,})(?P<info>.*)$")
+"""Opening or closing line of a fenced block, with its info string.
+
+{func}`fenced_code_lines` reads the info string to tell a code block from a
+MyST directive, which {data}`FENCE_RE` has no need to do. A line of prose that
+opens on a long code span is no fence: a backtick follows its marker.
+"""
+
 CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 """Inline code span, the only context these checks read.
 
@@ -97,6 +105,9 @@ table suffix and the trailing key are joined into one dotted path before
 lookup. Anchored at the start of the span so it never matches mid-sentence.
 """
 
+COOLDOWN_FLAG_RE = re.compile(r"--exclude-newer(?![\w-])")
+"""The `--exclude-newer` flag itself, which `--exclude-newer-package` is not."""
+
 COOLDOWN_WINDOW_RE = re.compile(r"--exclude-newer[= ]'(?P<window>[^']+)'")
 """A `--exclude-newer` flag carrying a quoted duration.
 
@@ -117,6 +128,13 @@ and ``see `Class.attribute` in `repomatic/pkg/mod.py` ``, differ only by the
 parentheses. Like {data}`MODULE_PATH_RE`, only the repository-relative path
 counts: a bare `mod.py` is too ordinary a span to key on, and this package
 already holds two modules named `matrix.py`.
+"""
+
+UVX_COMMAND_RE = re.compile(r"^[ \t]*(?:\$[ \t]+)?uvx[ \t]")
+"""A line whose command is `uvx`, with or without a shell prompt.
+
+Keyed on the command word, like every rule here: a `uvx` in the middle of a
+pipeline, of a YAML `run:` value or of a comment is left alone.
 """
 
 WORKFLOW_FILE_RE = re.compile(r"^(_?[a-z][a-z0-9-]*\.yaml)$")
@@ -193,6 +211,109 @@ def test_cooldown_window_matches_config(asset_id: str, body: str) -> None:
             f"{asset_id} gates an install on a {window!r} cooldown, but "
             f"[tool.repomatic] minimum-release-age is "
             f"{Config.minimum_release_age!r}."
+        )
+
+
+def fenced_code_lines(body: str) -> list[tuple[int, str]]:
+    """Every line of a fenced code block, as `(line number, text)` pairs.
+
+    A fence whose info string opens on `{` is a MyST directive. It holds prose,
+    so its lines are left out, and a code block nested in it still counts.
+    Inside a code block every line is content, a shorter fence included, until
+    a bare fence of the same character and at least the same length closes it.
+    """
+    found = []
+    # One `(marker, holds code)` pair per open fence, the innermost last.
+    open_fences: list[tuple[str, bool]] = []
+    for number, line in enumerate(body.splitlines(), 1):
+        fence = CODE_FENCE_RE.match(line)
+        in_code = bool(open_fences) and open_fences[-1][1]
+        if fence:
+            marker, info = fence.group("marker"), fence.group("info").strip()
+            if open_fences and not info and marker.startswith(open_fences[-1][0]):
+                open_fences.pop()
+                continue
+            if not in_code:
+                open_fences.append((marker, not info.startswith("{")))
+                continue
+        if in_code:
+            found.append((number, line))
+    return found
+
+
+def uvx_commands(body: str) -> list[tuple[int, str]]:
+    """Every `uvx` command of a fenced code block, as `(line number, command)` pairs.
+
+    A trailing backslash carries a command onto the next line. The lines it
+    spans are joined, because a flag can sit on any of them.
+    """
+    found = []
+    lines = fenced_code_lines(body)
+    for index, (number, line) in enumerate(lines):
+        if not UVX_COMMAND_RE.match(line):
+            continue
+        command = line.strip()
+        for _number, continuation in lines[index + 1 :]:
+            if not command.endswith("\\"):
+                break
+            command = command[:-1] + continuation.strip()
+        found.append((number, command))
+    return found
+
+
+def test_uvx_commands_come_from_code_blocks_only() -> None:
+    """The reader keeps a command of a code block, and nothing else.
+
+    One asset holds the only such command today, so a reader that finds nothing
+    passes every asset. This holds each shape the reader must tell apart.
+    """
+    body = (
+        "```` ```bash ```` opens a code block, and this line opens none.\n"
+        "uvx plum is prose.\n"
+        "\n"
+        "```{note}\n"
+        "uvx cherry is prose in a directive.\n"
+        "```\n"
+        "\n"
+        "```shell-session\n"
+        "$ uvx --exclude-newer '1 week' \\\n"
+        "    apricot\n"
+        "apricot 1.2.3\n"
+        "```\n"
+        "\n"
+        "````{tip}\n"
+        "```bash\n"
+        "uvx fig\n"
+        "```\n"
+        "````\n"
+        "\n"
+        "```yaml\n"
+        "run: uvx quince\n"
+        "```\n"
+    )
+    assert uvx_commands(body) == [
+        (9, "$ uvx --exclude-newer '1 week' apricot"),
+        (16, "uvx fig"),
+    ]
+
+
+@bundled_asset
+def test_uvx_commands_carry_a_cooldown(asset_id: str, body: str) -> None:
+    """Every `uvx` command an asset hands over carries `--exclude-newer`.
+
+    A `uvx` environment has no lockfile, so the flag is all that keeps a
+    release published an hour ago out of the tree it resolves. A per-package
+    exemption beside it is no substitute: it lifts the window for one package,
+    and sets none.
+
+    {func}`uvx_commands` reads what a maintainer copies into a shell, and
+    nothing else. A `run:` value of a workflow is left alone, because it takes
+    its window from the workflow-level `UV_EXCLUDE_NEWER`.
+    """
+    for number, command in uvx_commands(body):
+        assert COOLDOWN_FLAG_RE.search(command), (
+            f"{asset_id}:{number} runs `uvx` with no `--exclude-newer`, so the "
+            f"install resolves outside the cooldown: {command!r}"
         )
 
 

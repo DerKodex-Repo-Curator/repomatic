@@ -113,8 +113,10 @@ class MatrixMetadata:
           (runner, platform, architecture, binary extension, and the glibc floor
           or minimum-OS version that target enforces), narrowed to the
           `[tool.repomatic] nuitka.dev-targets` canary subset on an ordinary
-          push (see {attr}`dev_targets`); release commits, `schedule` and
-          `workflow_dispatch` runs keep the full roster
+          push (see
+          {attr}`~repomatic.metadata.project.ProjectMetadata.dev_targets`);
+          release commits, `schedule` and `workflow_dispatch` runs keep the full
+          roster
 
         Each axis contributes an `include` entry carrying the extra parameters
         the compile job needs, keyed on the axis value that selects it: the
@@ -435,7 +437,7 @@ class MatrixMetadata:
         `macos-26-intel`). The `lint-repo` check surfaces these so the drift
         fails loudly instead of silently.
 
-        The axes come from {attr}`_test_matrix_base`, never from the emitted
+        The axes come from `_test_matrix_base`, never from the emitted
         {attr}`test_matrix`: a `full-include` matrix emits as a flat job list
         whose `all_variations()` is empty, which would misreport every key of
         an entry as stale. Carrying the absent values in the result is what

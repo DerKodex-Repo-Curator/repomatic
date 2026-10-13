@@ -174,7 +174,7 @@ def json_version_rule(version: str) -> tuple[re.Pattern[str], str]:
     reporting an update that changes nothing.
 
     :param version: The release version to write.
-    :return: A `(pattern, replacement)` rule for {meth}`.PrepareRelease._rewrite_file`.
+    :return: A `(pattern, replacement)` rule for `PrepareRelease._rewrite_file`.
     """
     return (JSON_VERSION_RE, rf"\g<1>{version}\g<2>")
 
@@ -209,7 +209,7 @@ class PrepareRelease:
     def current_version(self) -> str:
         """Extract current version from the bump-my-version config.
 
-        Delegates discovery to {meth}`.Metadata.get_current_version`, which
+        Delegates discovery to {meth}`.ProjectMetadata.get_current_version`, which
         searches `.bumpversion.toml` then `pyproject.toml`.
         """
         version = Metadata.get_current_version()
@@ -225,7 +225,7 @@ class PrepareRelease:
     def package_name(self) -> str | None:
         """Canonical PyPI package name, used to spot pinned install examples.
 
-        Delegates discovery to {attr}`.Metadata.package_name`, which reads
+        Delegates discovery to {attr}`.ProjectMetadata.package_name`, which reads
         `pyproject.toml`.
         """
         return Metadata().package_name

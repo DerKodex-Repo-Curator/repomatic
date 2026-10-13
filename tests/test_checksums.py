@@ -18,9 +18,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import hashlib
+from unittest.mock import MagicMock, patch
 
-from repomatic.release.checksums import update_registry_checksums
+from repomatic.release.checksums import _download_sha256, update_registry_checksums
 from repomatic.tooling.tool_registry import TOOL_REGISTRY
 
 FAKE_HASH_OLD = "a" * 64
@@ -40,6 +41,33 @@ def _real_hash(url: str) -> str:
             if url_template.format(version=spec.version) == url:
                 return spec.binary.checksums[platform_key]
     return FAKE_HASH_OLD
+
+
+def test_download_sha256_retries_a_failed_first_attempt():
+    """One connection reset does not end a download: the next attempt answers.
+
+    A batch downloads every binary of the registry, so one transient error must
+    not abort it.
+    """
+    content = b"pear tart"
+    response = MagicMock()
+    response.headers.get.return_value = str(len(content))
+    response.read.side_effect = [content, b""]
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False
+
+    with (
+        patch(
+            "repomatic.tooling.tool_runner.urlopen",
+            side_effect=[ConnectionResetError("Connection reset by peer"), response],
+        ) as fake_urlopen,
+        patch("repomatic.tooling.tool_runner.time.sleep") as fake_sleep,
+    ):
+        digest = _download_sha256("https://example.com/pear-tart.tar.gz")
+
+    assert digest == hashlib.sha256(content).hexdigest()
+    assert fake_urlopen.call_count == 2
+    assert fake_sleep.call_count == 1
 
 
 def test_update_registry_checksums_replaces_stale_hash(tmp_path):

@@ -18,7 +18,7 @@
 
 The setup guide fans out to the GitHub and PyPI APIs: the PAT permission
 probe, the repository-settings checks, and an org-type lookup. Every seam is
-patched here through {func}`_offline_setup_guide`, so the suite runs offline
+patched here through `_offline_setup_guide`, so the suite runs offline
 and fast while the real issue-body assembly (template rendering, per-step
 collapse state, and the close/keep-open decision) stays under test.
 """

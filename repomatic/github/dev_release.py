@@ -81,9 +81,9 @@ def sync_dev_release(
     """Create or update the dev pre-release on GitHub.
 
     Reads the changelog, renders the release body for the given version
-    via {func}`build_expected_body`, then either edits the existing dev
-    release or creates a new one. Stale dev releases from previous
-    versions are always cleaned up.
+    via {func}`~repomatic.github.release_sync.build_expected_body`, then either
+    edits the existing dev release or creates a new one. Stale dev releases
+    from previous versions are always cleaned up.
 
     Existing releases are edited (not deleted and recreated) to preserve
     assets like compiled binaries from previous successful builds.

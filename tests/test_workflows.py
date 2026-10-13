@@ -1934,7 +1934,8 @@ def test_release_engine_lanes_not_materialized_downstream() -> None:
 
     They must not be downstream `FileEntry` file_ids (the release entry's
     file_id is `release.yaml`), and the entry's recorded source must be one of
-    the lanes so {data}`WORKFLOW_SOURCES` and the concept stay consistent.
+    the lanes so {data}`~repomatic.registry.WORKFLOW_SOURCES` and the concept
+    stay consistent.
     """
     materialized = set(RELEASE_ENGINE_WORKFLOWS) & set(ALL_WORKFLOW_FILES)
     assert not materialized, (
@@ -2198,7 +2199,7 @@ def test_every_setup_uv_step_pins_a_version(path: Path) -> None:
     Two reasons this must hold everywhere rather than mostly. Without the input,
     `setup-uv` installs the newest uv satisfying `required-version`, so the tool
     enforcing every cooldown arrives without one. And
-    {data}`~repomatic.release.version_sync._SETUP_UV_VERSION_RE` scans lazily from the
+    `repomatic.release.version_sync._SETUP_UV_VERSION_RE` scans lazily from the
     `uses:` line to the next `version:`, so a step missing the input would silently
     borrow the following step's and `sync-workflow-pins` would rewrite the wrong
     line.

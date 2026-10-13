@@ -626,7 +626,7 @@ def set_with_package_version(content: str, package: str, new_version: str) -> st
     Targets the `"{package}=={version}"` literal wherever it appears, unlike
     {func}`set_tool_version`, which is scoped to one `ToolSpec(` entry. Two tools
     pinning the same package therefore converge on one version rather than
-    drifting apart, matching how {func}`~repomatic.sync_ops._widest_changes`
+    drifting apart, matching how `repomatic.sync_ops._widest_changes`
     collapses a name pinned at several versions elsewhere.
 
     :param content: The `tool_registry.py` source text.
@@ -831,7 +831,7 @@ def find_upstream_ref_pins(content: str, upstream_repo: str) -> list[UpstreamRef
 
     Shared by `lint-repo`'s inline-pin lockstep check, `sync-workflow-pins`'
     upstream-pin alignment and `init`'s pin floor
-    ({func}`~repomatic.init_project._highest_upstream_pin`), so all three read
+    (`repomatic.init_project._highest_upstream_pin`), so all three read
     the refs the same way.
     """
     pattern = _upstream_ref_re(upstream_repo)

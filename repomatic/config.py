@@ -1855,7 +1855,7 @@ def load_repomatic_config(
     handles normalization, flattening, nested dataclasses, and opaque field
     extraction automatically based on field metadata and type hints.
 
-    Loads are memoized per parsed document (see {data}`_CONFIG_CACHE`), so
+    Loads are memoized per parsed document (see `_CONFIG_CACHE`), so
     treat the returned instance as read-only.
 
     :param pyproject_data: Pre-parsed `pyproject.toml` dict. If `None`,

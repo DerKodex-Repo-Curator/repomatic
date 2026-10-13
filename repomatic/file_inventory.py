@@ -186,7 +186,7 @@ class FileInventory:
 
         Patterns are glob patterns supporting `**` for recursive search, and `!`
         for negation, resolved against the current working directory: they
-        select from one shared walk of it (see {attr}`_all_files`), so an
+        select from one shared walk of it (see `_all_files`), so an
         absolute pattern matches nothing.
 
         All directories are traversed, whether they are hidden (i.e. starting with a

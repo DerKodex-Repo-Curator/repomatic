@@ -976,7 +976,7 @@ UV_CANDIDATES = [
     Candidate("0.12.3", "2026-08-07", "0.12.3"),
     Candidate("0.12.4", "2026-08-13", "0.12.4"),
 ]
-"""Three uv releases, all clear of the cooldown on {data}`GATE_TODAY`."""
+"""Three uv releases, all clear of the cooldown on `GATE_TODAY`."""
 
 GATE_TODAY = date(2026, 8, 28)
 MIN_AGE = timedelta(days=7)

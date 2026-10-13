@@ -492,7 +492,7 @@ def get_changelog_url(package: str) -> str | None:
     Queries the PyPI JSON API and scans `project_urls` for keys that
     typically point to a changelog or release notes page. Keys are matched
     case-insensitively, for the reason spelled out on
-    {data}`_SOURCE_URL_KEYS`: PyPI preserves whatever spelling the project
+    `_SOURCE_URL_KEYS`: PyPI preserves whatever spelling the project
     wrote, so `Changelog`, `changelog` and `CHANGELOG` all occur in the wild.
 
     :param package: The PyPI package name.

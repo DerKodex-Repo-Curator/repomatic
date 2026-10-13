@@ -225,6 +225,8 @@ nitpicky = True
 nitpick_ignore = [
     ("py:class", "_pytest.monkeypatch.MonkeyPatch"),
     ("py:class", "_pytest.tmpdir.TempPathFactory"),
+    # py-walk publishes no inventory to link this annotation to.
+    ("py:class", "py_walk.models.parser.Parser"),
     ("py:class", "pytest.MonkeyPatch"),
 ]
 
@@ -235,6 +237,10 @@ autodoc_member_order = "bysource"
 always_use_bars_union = True
 
 autodoc_default_options = {
+    # The CLI modules import these two Click classes. Their annotations hold
+    # forward references that resolve inside Click alone, so each module that
+    # imports one logs a warning. No member of this project has either name.
+    "exclude-members": "Parameter, UsageError",
     "members": True,
     "undoc-members": True,
     "show-inheritance": True,
@@ -253,6 +259,12 @@ intersphinx_mapping = {
         "https://kdeldycke.github.io/click-extra",
         None,
     ),
+    # The API pages name types of these four in signatures and docstrings, like
+    # `extra_platforms.Platform` and `packaging.version.Version`.
+    "boltons": ("https://boltons.readthedocs.io/en/latest", None),
+    "extra-platforms": ("https://kdeldycke.github.io/extra-platforms", None),
+    "packaging": ("https://packaging.pypa.io/en/stable", None),
+    "pyproject-metadata": ("https://pep621.readthedocs.io/en/latest", None),
 }
 
 # Prefix document path to section labels, to use:

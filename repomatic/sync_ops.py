@@ -46,7 +46,7 @@ discovery *is* a mutation (`uv lock` rewrites `uv.lock`), so their
 {attr}`SyncOperation.resolve` writes during the parallel phase and their
 {attr}`SyncOperation.apply` is a no-op. Their shared write domain (`uv.lock`,
 `pyproject.toml`) is disjoint from every other operation's, and the two are
-serialized against each other through {data}`_UV_PROJECT_MUTEX`. A `--dry-run`
+serialized against each other through `_UV_PROJECT_MUTEX`. A `--dry-run`
 resolve snapshots and restores the mutated files so the preview leaves no
 trace.
 
@@ -280,7 +280,7 @@ class UvProjectExtras:
     """Extras of the uv-project pair (`sync-uv-lock`, `sync-dep-sources`).
 
     The pair shares one write domain (`uv.lock`, `pyproject.toml`) and resolves
-    under {data}`_UV_PROJECT_MUTEX`. Each resolve already wrote those files, so
+    under `_UV_PROJECT_MUTEX`. Each resolve already wrote those files, so
     these fields only inform the terminal and PR-body rendering.
     """
 
@@ -404,7 +404,7 @@ class SyncPlan:
     rebase: Callable[[str], tuple[str, list[tuple[str, str, str]]]] | None = None
     """Replay this operation's rewriter against a file's current text.
 
-    Set by {func}`_plan_file_rewrites`. Applies run serially after every
+    Set by `_plan_file_rewrites`. Applies run serially after every
     resolve finished, and the two `.github/` pin updaters routinely plan
     rewrites of the same workflow files from the same pre-apply snapshot:
     writing {attr}`file_writes` verbatim would silently revert whichever

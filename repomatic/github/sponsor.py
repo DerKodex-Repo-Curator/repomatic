@@ -63,7 +63,7 @@ query($owner: String!, $cursor: String) {
 
 The user and organization queries are identical except for the node naming the
 account (`user` or `organization`), which doubles as the response's data path:
-{func}`_iter_sponsors` interpolates it into both places.
+`_iter_sponsors` interpolates it into both places.
 """
 
 

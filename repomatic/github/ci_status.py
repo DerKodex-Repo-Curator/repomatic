@@ -297,11 +297,6 @@ class CIStatus:
         return [run for run in self.runs if run.blocking]
 
     @property
-    def inconclusive(self) -> list[RunStatus]:
-        """Runs that settled without a result: cancelled, or skipped."""
-        return [run for run in self.runs if run.inconclusive]
-
-    @property
     def runs_on_tip(self) -> list[RunStatus]:
         """Runs created for the tip commit itself.
 

@@ -348,7 +348,7 @@ def test_exportable_file_loadable(filename: str) -> None:
 def test_native_templates_separate_header(comp: ToolConfigComponent) -> None:
     """Verify a template's file-level header ends with a blank line.
 
-    The separator is what {func}`~repomatic.init_project._strip_header_comments`
+    The separator is what `repomatic.init_project._strip_header_comments`
     keys on to tell a header apart from a comment documenting the first key,
     the two being otherwise identical: a comment run at the top of the file.
     Running the header straight into a key hides the key's own documentation
@@ -2764,10 +2764,11 @@ def test_ongoing_sync_template_survives_pyproject_fmt(
     pyproject.write_text(merged, encoding="UTF-8")
 
     before = _tool_section(merged, comp.tool_section)
-    version = TOOL_REGISTRY["pyproject-fmt"].version
+    spec = TOOL_REGISTRY["pyproject-fmt"]
+    version = spec.version
     try:
         result = subprocess.run(
-            ["uvx", "--no-progress", f"pyproject-fmt=={version}", str(pyproject)],
+            ["uvx", "--no-progress", spec.pypi_pin, str(pyproject)],
             check=False,
             capture_output=True,
             encoding="UTF-8",

@@ -926,10 +926,10 @@ def unsubscribe_threads(
 
     Runs two phases, each behind its own runner:
 
-    1. **REST notification threads** ({func}`_run_rest_phase`): fetches
+    1. **REST notification threads** (`_run_rest_phase`): fetches
        notification threads, inspects each subject for closed + stale status,
        and unsubscribes.
-    2. **GraphQL threadless subscriptions** ({func}`_run_graphql_phase`):
+    2. **GraphQL threadless subscriptions** (`_run_graphql_phase`):
        searches for closed issues/PRs the user is involved in and
        unsubscribes via mutation.
 

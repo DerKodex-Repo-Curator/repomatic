@@ -310,7 +310,7 @@ def load_template(name: str | Path) -> tuple[dict[str, object], str]:
 
     - `str` (e.g. `"bump-version"`): looked up as a packaged resource under
       `repomatic.templates`, cached for the process (see
-      {func}`_load_bundled_template`). Tries `{name}.md.noformat` first, then
+      `_load_bundled_template`). Tries `{name}.md.noformat` first, then
       `{name}.md`. The `.md.noformat` extension is used for templates whose
       `string.Template` placeholders confuse mdformat (e.g. `$rerun_entry`
       prefixed to a list line is parsed as literal text, breaking the list
@@ -641,7 +641,8 @@ def build_release_review_steps(md: Metadata, version: str) -> tuple[str, str]:
     - **Full-changes review**: links the `v{previous}...main` comparison.
       Omitted when no prior release exists to compare against.
 
-    Both come from a single {func}`dev_release_url_and_previous_version`
+    Both come from a single
+    {func}`~repomatic.github.releases.dev_release_url_and_previous_version`
     lookup. Each returned string is a complete ordered-list line ending in a
     newline (or empty), written with a `1.` marker so the surrounding lazily
     numbered list renumbers correctly however many steps survive.

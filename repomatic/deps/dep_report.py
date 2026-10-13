@@ -223,8 +223,8 @@ def format_diff_table(
     :param changes: List of `(name, old_version, new_version)` tuples
         as returned by {func}`repomatic.deps.uv.diff_lock_versions`.
     :param upload_times: Optional mapping of package names to ISO 8601
-        upload-time strings, as returned by
-        {func}`repomatic.deps.uv.parse_lock_upload_times`.
+        upload-time strings, as held by
+        {attr}`repomatic.deps.uv.LockFile.upload_times`.
     :param cooldown_note: Optional pre-rendered markdown sentence describing
         the cooldown cutoff, shown above the table. Build it with
         {func}`format_exclude_newer_note` (uv) or

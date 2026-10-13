@@ -313,7 +313,7 @@ RUNS_ON_RE_TEMPLATE = (
 """A literal `runs-on:` naming one label, anchored to its own line.
 
 Rewritten as raw text rather than through a YAML round-trip, for the reason
-{func}`~repomatic.github.workflow_sync._extract_raw_job` gives: a round-trip
+`repomatic.github.workflow_sync._extract_raw_job` gives: a round-trip
 reformats the whole file, and a runner bump should read as a one-line diff.
 The optional quote group is carried through so a quoted value stays quoted.
 """

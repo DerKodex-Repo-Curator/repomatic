@@ -530,7 +530,7 @@ def test_read_ci_status_walks_back_from_a_run_that_ran_no_job():
     ]
     assert status.skipped_on_tip == ["tests.yaml"]
     assert status.runs[0].verdict == "cancelled (1 required job(s))"
-    assert status.inconclusive == [status.runs[0]]
+    assert [run.inconclusive for run in status.runs] == [True, False]
     assert status.blocking == []
 
 
@@ -579,7 +579,7 @@ def test_read_ci_status_reports_a_workflow_that_only_skipped():
         status = read_ci_status(["tests.yaml"], "main")
     assert [(run.run_id, run.head_sha) for run in status.runs] == [(42, TIP_SHA)]
     assert status.runs[0].verdict == "skipped (no job ran)"
-    assert status.inconclusive == status.runs
+    assert status.runs[0].inconclusive is True
     assert status.skipped_on_tip == []
     assert not _called(mock, "actions/workflows/")
 
@@ -610,7 +610,7 @@ def test_read_ci_status_prefers_a_run_with_a_result_on_the_same_commit(
         status = read_ci_status(["tests.yaml"], "main")
     assert [run.run_id for run in status.runs] == [with_result]
     assert status.skipped_on_tip == []
-    assert status.inconclusive == []
+    assert status.runs[0].inconclusive is False
     assert not _called(mock, PARENT_SHA)
 
 

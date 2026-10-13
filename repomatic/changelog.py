@@ -196,7 +196,7 @@ empty PyPI lookup is treated as a transient failure rather than a genuine
 ```{note}
 Two layers of ambiguity make this threshold necessary:
 
-1. {func}`repomatic.pypi._fetch_json` returns `None` on every failure mode
+1. `repomatic.pypi._fetch_json` returns `None` on every failure mode
    (HTTP 4xx/5xx, network error, timeout, JSON parse error), collapsing
    "package not on PyPI" and "transient API failure" into the same empty
    result.
@@ -253,6 +253,13 @@ heading, a comparison URL) uses this one.
 """
 
 VERSION_TOKEN = rf"{RELEASE_VERSION_TOKEN}(?:\.\w+)?"
+"""Regex fragment for any version a `##` heading may carry.
+
+Widens {data}`RELEASE_VERSION_TOKEN` with the trailing `.devN` a
+development section carries between releases. Anything enumerating or
+locating headings uses this one, so an unreleased section is never
+invisible to a scan that has to account for it.
+"""
 
 GFM_ALERT_RE = re.compile(r"(?:^>.*$\n?)+", re.MULTILINE)
 """A GFM alert block: consecutive lines starting with `>`.
@@ -260,13 +267,6 @@ GFM_ALERT_RE = re.compile(r"(?:^>.*$\n?)+", re.MULTILINE)
 The shape every changelog admonition takes (the development warning, the PyPI
 availability note, a yanked caution), matched wherever a section's blocks are
 inventoried.
-"""
-"""Regex fragment for any version a `##` heading may carry.
-
-Widens {data}`RELEASE_VERSION_TOKEN` with the trailing `.devN` a
-development section carries between releases. Anything enumerating or
-locating headings uses this one, so an unreleased section is never
-invisible to a scan that has to account for it.
 """
 
 VERSION_COMPARE_PATTERN = re.compile(

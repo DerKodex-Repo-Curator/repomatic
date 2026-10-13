@@ -256,7 +256,7 @@ def test_generated_caller_ends_with_one_newline(filename: str) -> None:
     """Every generated caller ends with exactly one trailing newline.
 
     Nothing downstream of the generator collapses trailing whitespace:
-    {func}`~repomatic.init_project._write_managed` writes callers with
+    `repomatic.init_project._write_managed` writes callers with
     `normalize=False`, because their exact bytes carry downstream-owned jobs
     verbatim. A stray blank line therefore reaches every consuming repository.
 
@@ -1368,7 +1368,7 @@ BUNDLED_WITHOUT_CONCURRENCY = tuple(
 
 `_release-engine.yaml` is here by design: it delegates concurrency to the
 push-triggered `release.yaml` entry that calls it (see
-{func}`_generate_release_caller`).
+`_generate_release_caller`).
 """
 
 

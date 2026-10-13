@@ -37,6 +37,7 @@
 - The bundled `repomatic-deps` skill now reads the whole `modernize` range off the lockfile when several `sync-uv-lock` pull requests merged since the last release.
 - The bundled `repomatic-ship` skill now says how to take over a sweep lane after its agent dies mid-edit.
 - The bundled `repomatic-ship` skill now says how to watch CI past the 30-minute `Monitor` deadline, and to watch a dispatched run by its ID.
+- The bundled `repomatic-ship` skill now limits its docs build fixes to the warnings the cycle added, and runs its tool smoke checks in a throwaway worktree.
 - The bundled `repomatic-test-matrix` skill now says how to run every declared dependency floor in one `lowest-direct` cell.
 - The bundled `upstream-audit` skill now assigns each item to the project that produced it, and lists every issue the maintainer reported.
 - The bundled `sphinx-docs` agent now runs `sphinx-build` with the command sandbox off: `sphinx_sitemap` fails inside it.
@@ -50,8 +51,10 @@
 - Fix `fix-typos` failing on `certifi` in a dependency graph that includes `requests`: the bundled `typos` config now accepts it.
 - Fix `repomatic run ruff` and `repomatic run typos` ignoring the tool's exclude list for a file named on the command line.
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
+- Fix `repomatic run --verify` ending in a traceback when it cannot copy a target: it now names the path and exits with code `2`.
 - Fix `update-docs` not reading a MyST `toctree` fence in an API index, and filing a package page that has no submodule pages under `Submodules`.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
+- Fix `update-checksums` and `sync-tool-versions` stopping at the first failed download: each download is now retried, like a tool install.
 - Fix `sync-uv-lock` never freezing or pruning an `exclude-newer-package` entry whose key spells its package name differently from the lockfile.
 - Fix `sync-runner-images` failing to push its pull request: its checkout now passes `REPOMATIC_PAT`, which GitHub requires to update a workflow file.
 - Fix the `packaging` and `vt-py` floors, which allowed releases the code cannot run on: they are now `>=20` and `>=0.18.3`.
@@ -67,6 +70,7 @@
 - The workflows reference now lists every `lint-repo` check, rendered from the check roster like `lint-repo --help`.
 - Document that mdformat also deletes backslash escapes and entities from a Markdown image's alt-text.
 - Document in the bundled `uv` config that CI installs the uv each `setup-uv` step pins, not the newest release above the floor.
+- Document that a tool the registry pins before its release clears the cooldown needs an `exclude-newer-package` entry, in a downstream repository too.
 
 ## [`7.17.1` (2026-09-30)](https://github.com/kdeldycke/repomatic/compare/v7.17.0...v7.17.1)
 

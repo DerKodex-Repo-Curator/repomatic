@@ -470,7 +470,7 @@ jobs:
         # The binary self-test reads ./tests/cli-test-suite.toml (the click-extra 8.1
         # default), parsed with the built-in tomllib, so no optional extra is needed.
         run: >
-          uv run --frozen --no-progress --
+          uv --no-progress run --frozen --
           click-extra test-suite
           --binary "${DOWNLOAD_PATH}/${BIN_NAME}"
           --jobs max

@@ -52,11 +52,11 @@ Each platform caches through a different mechanism:
 
 The cache-prep step writes two non-default settings into `ccache.conf`, inside the persisted cache directory. `compiler_check = content` replaces the default, which hashes the compiler's mtime and size. `base_dir` points at the runner work root. ccache then hashes every path below that root as a relative path, so a work root that moves between machines keeps its cache keys. `base_dir` cannot hide a directory name that changes in the middle of a path, which is why the tool runner pins the path of Nuitka itself, as described below. The job also exports `CCACHE_DIR`. Since `4.3`, Nuitka gives ccache one subdirectory per Python ABI (`ccache/3.14`), and ccache reads `ccache.conf` from the directory it is given: without the variable, the file sits one level above and is never read.
 
-Measured on `7.9.0.dev0` (Nuitka `4.1.3`, ~470-495 C files per binary), cold versus warm-cache execution time of the compile job:
+Cold versus warm-cache execution time of the compile job, per target. The `linux-arm64` row holds the medians of the 43 builds measured below: the 23 builds without a hit give the cold figure, and the 20 builds with hits give the warm one. The other rows come from `7.9.0.dev0` (Nuitka `4.1.3`, ~470-495 C files per binary):
 
 | Target          | Cold     | Warm       | Warm hit rate    |
 | --------------- | -------- | ---------- | ---------------- |
-| `linux-arm64`   | 9.4 min  | 3.0 min    | 470/470          |
+| `linux-arm64`   | 11.8 min | 4.5 min    | 503 to 511 files |
 | `linux-x64`     | 11.9 min | 3.4 min    | 470/470          |
 | `windows-x64`   | 17.4 min | 6.0 min    | 495/495          |
 | `windows-arm64` | 15.5 min | 6.5 min    | 494/495          |
@@ -127,7 +127,7 @@ Three Nuitka issues shape the integration; each workaround names its ticket and 
 Nuitka `4.3` fixed five other reports, and repomatic dropped the workaround for each: [](upstream.md#upstreamed-from-repomatic) lists them. One more report is open and has no workaround: [Nuitka#4087](https://github.com/Nuitka/Nuitka/issues/4087), which [Compile caching](#compile-caching) describes.
 
 ```{todo}
-Delete the `ccache.conf` `base_dir` write once [Nuitka#3996](https://github.com/Nuitka/Nuitka/issues/3996) ships. The two other shims have no deadline. [Nuitka#3909](https://github.com/Nuitka/Nuitka/issues/3909) shipped in `4.2` and retired nothing, because the fix reaches `--project` builds only. On [Nuitka#3997](https://github.com/Nuitka/Nuitka/issues/3997) the maintainer has not declined the request: he asked how digests could stay current across architectures without breaking older releases whose downloads move, and said tooling for it would be welcome, so the unconditional macOS `--disable-ccache` stays until someone writes that.
+Delete the `ccache.conf` `base_dir` write once [Nuitka#3996](https://github.com/Nuitka/Nuitka/issues/3996) ships. Check then whether the install into the project virtualenv can go too. It can only if the fix keeps Nuitka's install path out of the hashed compiler arguments. The two other shims have no deadline. [Nuitka#3909](https://github.com/Nuitka/Nuitka/issues/3909) shipped in `4.2` and retired nothing, because the fix reaches `--project` builds only. On [Nuitka#3997](https://github.com/Nuitka/Nuitka/issues/3997) the maintainer has not declined the request: he asked how digests could stay current across architectures without breaking older releases whose downloads move, and said tooling for it would be welcome, so the unconditional macOS `--disable-ccache` stays until someone writes that.
 ```
 
 ## Troubleshooting

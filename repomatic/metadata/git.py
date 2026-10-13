@@ -226,7 +226,7 @@ class GitMetadata:
 
         To prevent any loss of uncommitted data, it stashes local changes
         before its checkouts and restores the initial state however the scan
-        exits, through {meth}`_restored_worktree`.
+        exits, through `_restored_worktree`.
         ```
 
         The list of commits is augmented with long and short SHA values, as well as
@@ -323,8 +323,9 @@ class GitMetadata:
     def binary_affecting_paths(self) -> tuple[str, ...]:
         """Path prefixes that affect compiled binaries for this project.
 
-        Combines the static {data}`BINARY_AFFECTING_PATHS` (common files like
-        `pyproject.toml`, `uv.lock`, `tests/`) with project-specific source
+        Combines the static
+        {data}`~repomatic.release.binary.BINARY_AFFECTING_PATHS` (common files
+        like `pyproject.toml`, `uv.lock`, `tests/`) with project-specific source
         directories derived from `[project.scripts]` in `pyproject.toml`.
 
         For example, a project with `mpm = "meta_package_manager.__main__:main"`

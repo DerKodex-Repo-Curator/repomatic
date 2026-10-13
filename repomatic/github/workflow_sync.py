@@ -120,7 +120,7 @@ def cooldown_env_block() -> str:
     than written by hand, so the literal in the YAML has exactly one source. The
     same text is asserted verbatim against every checked-in workflow by
     `tests/test_workflows.py`, and emitted into the downstream `release.yaml`
-    caller by {func}`_generate_release_caller`.
+    caller by `_generate_release_caller`.
 
     ```{caution}
     The comment travels into every downstream repository, so it must read true
@@ -879,7 +879,7 @@ def generate_thin_caller(
 EXTRA_JOBS_SEPARATOR: Final[str] = "\n\n"
 """Gap between the last managed lane and the downstream extras below it.
 
-Exactly one blank line, matching how {func}`_generate_release_caller` separates
+Exactly one blank line, matching how `_generate_release_caller` separates
 its own jobs. Both sides are trimmed before it is applied, because neither end
 is stable on its own: the release caller ends on a trailing blank line where a
 plain thin caller does not, and {func}`extract_extra_jobs` slices from the end
@@ -1206,7 +1206,7 @@ The canonical entry may hold repomatic-local jobs beyond these three (its own
 `pack-plugin`, for one), and only these three are copied downstream. Anything
 the canonical `release` lane names in `needs:` outside this set has to be
 dropped, or the generated file would reference a job that does not exist there.
-See {func}`_merge_release_needs`.
+See `_merge_release_needs`.
 """
 
 

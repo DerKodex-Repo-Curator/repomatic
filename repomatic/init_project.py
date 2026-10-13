@@ -165,14 +165,15 @@ RUNTIME_FRAGMENTS: tuple[str, ...] = (
 """Bundled files loaded by `repomatic` at runtime, not deployed verbatim.
 
 These files live in `repomatic/data/` so they ship in the wheel and are
-discoverable via {func}`get_data_content`, but `repomatic init` never copies them
-as-is. `release.yaml` is the canonical caller `repomatic.github.workflow_sync`
-reads to assemble each downstream `release.yaml`, copying its jobs and rewriting
-the local `uses:` refs (see `_generate_release_caller`); the deployed
-`release.yaml` is generated, not this bundled copy. `vt-trend-chart.js` is the
-detections-chart script `repomatic.release.binaries_page.render_chart_section` splices
-into `docs/binaries.md` with its payload placeholders filled. New entries must
-be added explicitly so the data-file registry tests stay authoritative.
+discoverable via {func}`~repomatic.tooling.bundle.get_data_content`, but
+`repomatic init` never copies them as-is. `release.yaml` is the canonical caller
+`repomatic.github.workflow_sync` reads to assemble each downstream
+`release.yaml`, copying its jobs and rewriting the local `uses:` refs (see
+`_generate_release_caller`); the deployed `release.yaml` is generated, not this
+bundled copy. `vt-trend-chart.js` is the detections-chart script
+`repomatic.release.binaries_page.render_chart_section` splices into
+`docs/binaries.md` with its payload placeholders filled. New entries must be
+added explicitly so the data-file registry tests stay authoritative.
 """
 
 
@@ -742,7 +743,7 @@ def resolve_default_pin(
     repomatic version paired with its build-time SHA. Only when adopting a
     release still inside the `[tool.repomatic] minimum-release-age` window does
     the pin step back to the newest cooldown-cleared release (see
-    {func}`_select_cooldown_pin`), resolving that tag's SHA afresh.
+    `_select_cooldown_pin`), resolving that tag's SHA afresh.
 
     ```{important}
     The cooldown may hold back an *adoption*. It may never rewrite a pin the
@@ -782,7 +783,7 @@ def resolve_default_pin(
         addition to being logged), so `run_init` can surface it in the final
         `init` summary rather than only mid-run.
     :param floor: The highest upstream pin already committed downstream, from
-        {func}`_highest_upstream_pin`. `None` for a repository carrying none,
+        `_highest_upstream_pin`. `None` for a repository carrying none,
         the one case the cooldown may step back freely.
     :return: `(version_pin, commit_sha)`. `commit_sha` is `None` when no SHA can
         be resolved, leaving a bare tag pin.
@@ -1404,7 +1405,8 @@ def run_init(
         (see {func}`resolve_default_pin`). Ignored when *version* is explicit.
     :param repo: Upstream repository containing reusable workflows.
     :param repo_slug: Repository `owner/name` slug for awesome-template URL
-        rewriting. Auto-detected via {class}`Metadata` if not provided.
+        rewriting. Auto-detected via
+        {class}`~repomatic.metadata.core.Metadata` if not provided.
     :param config: The resolved `[tool.repomatic]` configuration. Loaded from
         the current directory when omitted, so a caller working against another
         tree must pass the config it read from there.
