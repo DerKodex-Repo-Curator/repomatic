@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
+import sys
 from collections import Counter
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
@@ -1059,6 +1061,34 @@ def test_file_inventories_are_not_vacuous():
     # Symlink twins collapse onto their targets, like `glob_files` resolves.
     assert "repomatic/data/autofix.yaml" not in expected["yaml_files"]
     assert "repomatic/data/agent-grunt-qa.md" not in MARKDOWN_INVENTORY
+
+
+def test_gitignore_is_decoded_as_utf8_whatever_the_locale(tmp_path):
+    """A non-ASCII `.gitignore` pattern matches under a locale that is not UTF-8.
+
+    py-walk decodes the file with the locale encoding, so the inventory decodes
+    it itself. The probe runs in an interpreter of its own, because the locale
+    is fixed when an interpreter starts. It is a file and not a `-c` argument:
+    Python reads a source file as UTF-8 under any locale, and its command line
+    with the locale encoding.
+    """
+    tmp_path.joinpath(".gitignore").write_text("café/\n", encoding="UTF-8")
+    tmp_path.joinpath("probe.py").write_text(
+        "from repomatic.file_inventory import FileInventory\n"
+        "print(FileInventory().gitignore_match('café/menu.txt'))\n",
+        encoding="UTF-8",
+    )
+    result = subprocess.run(
+        [sys.executable, "probe.py"],
+        capture_output=True,
+        check=False,
+        cwd=tmp_path,
+        encoding="UTF-8",
+        env=dict(os.environ, LC_ALL="C", PYTHONCOERCECLOCALE="0", PYTHONUTF8="0"),
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "True"
 
 
 @pytest.mark.repo_maintenance

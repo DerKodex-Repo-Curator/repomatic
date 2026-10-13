@@ -32,6 +32,15 @@ every existing caller.
 Drop the py-walk dependency and parse `.gitignore` with wcmatch, already
 imported here for globbing, once it reads gitignore files natively:
 [facelessuser/wcmatch#226](https://github.com/facelessuser/wcmatch/issues/226).
+Pick another parser first if
+[pacha/py-walk#11](https://github.com/pacha/py-walk/issues/11) ends with
+py-walk retired: `sly`, its only dependency, already is.
+```
+
+```{todo}
+Go back to `get_parser_from_file` in {attr}`FileInventory.gitignore_parser`,
+and raise the py-walk floor to the release that carries the fix, once
+[pacha/py-walk#10](https://github.com/pacha/py-walk/pull/10) ships.
 ```
 """
 
@@ -42,7 +51,7 @@ import os
 from functools import cached_property
 from pathlib import Path, PurePath
 
-from py_walk import get_parser_from_file
+from py_walk import get_parser_from_text
 from py_walk.models import Parser
 from wcmatch.glob import (
     BRACE,
@@ -116,10 +125,16 @@ class FileInventory:
 
     @cached_property
     def gitignore_parser(self) -> Parser | None:
-        """Returns a parser for the `.gitignore` file, if it exists."""
+        """Returns a parser for the `.gitignore` file, if it exists.
+
+        The file is decoded here, as UTF-8. `get_parser_from_file` of py-walk
+        decodes it with the locale encoding, so a pattern with a non-ASCII
+        character misses its path on a machine whose locale is not UTF-8.
+        """
         if self.gitignore_exists:
             logging.debug(f"Parse {GITIGNORE_PATH}")
-            return get_parser_from_file(GITIGNORE_PATH)
+            text = GITIGNORE_PATH.read_text(encoding="UTF-8")
+            return get_parser_from_text(text, base_dir=GITIGNORE_PATH.parent)
         return None
 
     def _in_ignored_dir(self, file_path: str) -> bool:

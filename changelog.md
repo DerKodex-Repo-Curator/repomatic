@@ -52,6 +52,7 @@
 - Fix `repomatic run ruff` and `repomatic run typos` ignoring the tool's exclude list for a file named on the command line.
 - Fix `repomatic run mdformat` skipping its MyST directive repairs for the files below a directory argument.
 - Fix `repomatic run --verify` ending in a traceback when it cannot copy a target: it now names the path and exits with code `2`.
+- Fix a `.gitignore` pattern with a non-ASCII character missing its files on a machine whose locale is not UTF-8.
 - Fix `update-docs` not reading a MyST `toctree` fence in an API index, and filing a package page that has no submodule pages under `Submodules`.
 - Fix `sync-workflow-pins` bumping the uv pin when it cannot read the `setup-uv` checksum table: it now holds the pin until the table reads again.
 - Fix `update-checksums` and `sync-tool-versions` stopping at the first failed download: each download is now retried, like a tool install.
